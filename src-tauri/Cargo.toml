@@ -1,0 +1,43 @@
+[package]
+name = "agent-aleph"
+version = "0.1.0"
+description = "Agent Aleph — agente de codificación 100% local sobre llama.cpp, simple de usar"
+authors = ["matiasA"]
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "agent_aleph_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.1", features = [] }
+tauri-plugin-shell = "2.0"
+tauri-plugin-dialog = "2.0"
+tauri-plugin-process = "2.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"], default-features = false }
+futures-util = "0.3"
+dirs = "5"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+anyhow = "1"
+thiserror = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tokio-util = "0.7"
+bytes = "1"
+once_cell = "1"
+async-trait = "0.1"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

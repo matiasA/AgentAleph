@@ -1,0 +1,31 @@
+# Cargo
+target/
+**/*.rs.bk
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+
+# Internal dev guidance (not published)
+CLAUDE.md
+
+# Binarios pesados de llama.cpp (se obtienen con scripts/setup-llama.sh)
+/src-tauri/binaries/*
+!/src-tauri/binaries/README.md
