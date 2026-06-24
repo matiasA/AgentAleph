@@ -1,5 +1,5 @@
+use crate::agent::message::AgentMsg;
 use crate::error::AppResult;
-use crate::state::ChatMsg;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -13,7 +13,7 @@ pub struct StoredSession {
     pub created: String,
     pub updated: String,
     /// Conversación completa con el modelo (incluye el system prompt en la posición 0).
-    pub messages: Vec<ChatMsg>,
+    pub messages: Vec<AgentMsg>,
 }
 
 /// Metadatos ligeros para listar sesiones sin cargar toda la conversación.

@@ -16,7 +16,7 @@ export interface Accent {
 /** Acentos sobre la base "Anysphere Dark". El azul es el acento original de
  *  Cursor; los demás son tomados de la paleta de sintaxis de Anysphere. */
 export const ACCENTS: Accent[] = [
-  { id: "blue", label: "Anysphere", swatch: "#228df2" },
+  { id: "blue", label: "Zed", swatch: "#4d7fff" },
   { id: "indigo", label: "Lavanda", swatch: "#aaa0fa" },
   { id: "emerald", label: "Teal", swatch: "#83d6c5" },
   { id: "amber", label: "Ámbar", swatch: "#e3b341" },

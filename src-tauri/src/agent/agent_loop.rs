@@ -1,9 +1,11 @@
+use crate::agent::context;
+use crate::agent::message::{approx_tokens, to_wire, to_wire_native, AgentMsg, ToolCall};
 use crate::agent::permissions::{self, AgentMode, Decision};
 use crate::agent::session_store;
 use crate::agent::{grammar::tool_call_grammar, prompt::system_prompt, tools, tools::Registry};
 use crate::error::{AppError, AppResult};
 use crate::settings::Settings;
-use crate::state::{AppState, ChatMsg};
+use crate::state::AppState;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -14,6 +16,18 @@ use tokio_util::sync::CancellationToken;
 
 /// Tope duro de pasos por turno para evitar bucles infinitos en modelos débiles.
 const MAX_STEPS: usize = 25;
+
+/// Mensaje final cuando se aborta por bucle (misma llamada repetida demasiadas veces).
+const LOOP_MSG: &str = "Me quedé repitiendo la misma acción sin avanzar. Detengo la tarea; \
+                        revisa el resultado de los pasos anteriores.";
+
+/// Resultado de procesar una llamada a herramienta dentro de un paso.
+enum CallFlow {
+    /// Llamada atendida (ejecutada, denegada, inválida o con nudge): seguir.
+    Continue,
+    /// Misma llamada repetida demasiadas veces: abortar el turno.
+    Loop,
+}
 
 // ---------- Eventos hacia el frontend ----------
 
@@ -72,6 +86,72 @@ struct ChatChoice {
 struct ChatDelta {
     content: Option<String>,
     reasoning_content: Option<String>,
+    #[serde(default)]
+    tool_calls: Option<Vec<DeltaToolCall>>,
+}
+#[derive(Deserialize)]
+struct DeltaToolCall {
+    #[serde(default)]
+    index: usize,
+    id: Option<String>,
+    function: Option<DeltaFunc>,
+}
+#[derive(Deserialize)]
+struct DeltaFunc {
+    name: Option<String>,
+    arguments: Option<String>,
+}
+
+/// Resultado de un paso de inferencia: texto del asistente y, en la ruta nativa, las llamadas
+/// a herramienta emitidas. En la ruta GBNF `tool_calls` queda vacío (la llamada va en `content`).
+#[derive(Default)]
+struct StepOutput {
+    content: String,
+    tool_calls: Vec<ToolCall>,
+}
+
+/// Acumulador de una llamada nativa cuyos fragmentos llegan repartidos entre chunks del stream.
+#[derive(Default)]
+struct AccCall {
+    id: String,
+    name: String,
+    args: String,
+}
+
+/// Decide si usar la ruta nativa para el modelo cargado, según la preferencia del usuario.
+/// En `"auto"` aplica una heurística por familia/tamaño del modelo (las familias con
+/// tool-calling fiable van por nativo; los modelos chicos siguen con GBNF, más robusto).
+fn use_native_tools(pref: &str, model_name: &str) -> bool {
+    match pref {
+        "native" => true,
+        "grammar" => false,
+        _ => auto_native(model_name),
+    }
+}
+
+fn auto_native(model_name: &str) -> bool {
+    let n = model_name.to_lowercase();
+    // Modelos chicos: el tool-calling nativo es poco fiable → preferimos GBNF.
+    const SMALL: &[&str] = &["0.5b", "0.8b", "-1b", "1.5b", "-2b", "-3b", "1.7b"];
+    if SMALL.iter().any(|s| n.contains(s)) {
+        return false;
+    }
+    // Familias con soporte nativo de herramientas razonablemente fiable en GGUF.
+    const NATIVE: &[&str] = &[
+        "coder",
+        "qwen2.5",
+        "qwen3",
+        "llama-3.1",
+        "llama-3.2",
+        "llama-3.3",
+        "hermes",
+        "functionary",
+        "firefunction",
+        "command-r",
+        "mistral",
+        "mixtral",
+    ];
+    NATIVE.iter().any(|s| n.contains(s))
 }
 
 /// Lanza un turno de agente en una tarea en segundo plano y emite eventos `agent://*`.
@@ -91,6 +171,7 @@ pub async fn run_agent(
         ));
     }
     let settings = state.settings.lock().await.clone();
+    let active_model = state.active_model.lock().await.clone().unwrap_or_default();
 
     let cancel = CancellationToken::new();
     state
@@ -109,6 +190,7 @@ pub async fn run_agent(
             &state,
             port,
             &settings,
+            &active_model,
             &session_id,
             &working_dir,
             mode,
@@ -138,6 +220,7 @@ async fn run_inner(
     state: &Arc<AppState>,
     port: u16,
     settings: &Settings,
+    active_model: &str,
     session_id: &str,
     working_dir: &str,
     mode: AgentMode,
@@ -151,7 +234,13 @@ async fn run_inner(
     let url = format!("http://127.0.0.1:{}/v1/chat/completions", port);
     let registry = Registry::new();
     let docs = registry.docs();
+    let native = use_native_tools(&settings.tool_calling, active_model);
     let grammar = tool_call_grammar(&docs);
+    let tools_schema = registry.openai_tools();
+    tracing::info!(
+        "agente: ruta de tool-calling = {} (modelo: {active_model})",
+        if native { "nativa" } else { "GBNF" }
+    );
 
     // Límite de tokens de la respuesta por paso y presupuesto de contexto para el prompt.
     let step_max_tokens = (settings.max_tokens as usize).min(1024);
@@ -170,17 +259,14 @@ async fn run_inner(
         .map(|s| s.created.clone())
         .unwrap_or_else(session_store::now_iso);
 
-    let mut convo: Vec<ChatMsg> = match prev {
+    let mut convo: Vec<AgentMsg> = match prev {
         Some(s) if !s.messages.is_empty() => s.messages,
-        _ => vec![ChatMsg {
-            role: "system".into(),
-            content: system_prompt(working_dir, &docs),
-        }],
+        _ => {
+            let skills = crate::agent::skills::enabled_docs();
+            vec![AgentMsg::system(system_prompt(working_dir, &docs, native, &skills))]
+        }
     };
-    convo.push(ChatMsg {
-        role: "user".into(),
-        content: user_input,
-    });
+    convo.push(AgentMsg::user(user_input));
 
     // Conteo de llamadas idénticas (herramienta + args) para detectar bucles.
     let mut seen: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
@@ -203,142 +289,79 @@ async fn run_inner(
             },
         );
 
-        // Se envía una vista recortada al presupuesto; `convo` conserva el historial completo.
+        // Al cruzar el presupuesto, compactar: resumir los turnos antiguos con una llamada
+        // dedicada al modelo y sustituirlos por un único resumen (en vez de borrarlos).
+        match context::maybe_compact(&client, &url, settings, &mut convo, ctx_budget, &cancel).await
+        {
+            Ok(true) => tracing::info!("contexto compactado en el paso {step}"),
+            Ok(false) => {}
+            Err(AppError::Other(ref m)) if m == "cancelled" => {
+                return Err(AppError::Other("cancelled".into()))
+            }
+            Err(e) => tracing::warn!("compactación: {e}"),
+        }
+
+        // `budget_view` queda como red de seguridad barata si aún excede tras compactar.
         let request_msgs = budget_view(&convo, ctx_budget);
-        let raw = infer_step(
-            &client, &url, settings, step_max_tokens, &grammar, &request_msgs, app, session_id,
-            &cancel,
+        let out = infer_step(
+            &client, &url, settings, step_max_tokens, native, &grammar, &tools_schema,
+            &request_msgs, app, session_id, &cancel,
         )
         .await?;
 
-        let (tool, args) = match parse_tool_call(&raw) {
-            Ok(v) => v,
-            Err(e) => {
-                // Modelo emitió algo no parseable: devolvemos feedback y reintentamos.
-                convo.push(ChatMsg {
-                    role: "assistant".into(),
-                    content: raw.clone(),
-                });
-                convo.push(ChatMsg {
-                    role: "user".into(),
-                    content: format!(
-                        "Error: tu respuesta no fue un objeto JSON válido ({e}). Responde con un único objeto JSON con la forma {{\"tool\": ..., \"args\": ...}}."
-                    ),
-                });
-                continue;
+        if native {
+            // Ruta nativa: sin tool_calls ⇒ el modelo dio su respuesta final en texto.
+            if out.tool_calls.is_empty() {
+                convo.push(AgentMsg::assistant(out.content.clone()));
+                outcome = (out.content, "done".into());
+                break;
             }
-        };
-
-        // Guardamos la decisión del modelo en la conversación.
-        convo.push(ChatMsg {
-            role: "assistant".into(),
-            content: raw.clone(),
-        });
-
-        if tool == "final" {
-            let text = args
-                .get("text")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            outcome = (text, "done".into());
-            break;
-        }
-
-        let args_str = serde_json::to_string(&args).unwrap_or_else(|_| "{}".into());
-
-        // Validar args contra el esquema de la herramienta antes de cualquier otra cosa.
-        if let Err(e) = registry.validate(&tool, &args) {
-            let msg = format!("argumentos inválidos: {e}");
-            emit_tool(app, session_id, step, &tool, &args_str, &msg, true);
-            convo.push(ChatMsg {
-                role: "user".into(),
-                content: format!("Resultado de {tool} (ERROR):\n{msg}"),
-            });
-            continue;
-        }
-
-        // Detección de bucles: misma herramienta + args repetida.
-        let sig = format!("{tool}:{args_str}");
-        let count = {
-            let c = seen.entry(sig).or_insert(0);
-            *c += 1;
-            *c
-        };
-        if count >= 4 {
-            outcome = (
-                "Me quedé repitiendo la misma acción sin avanzar. Detengo la tarea; \
-                 revisa el resultado de los pasos anteriores."
-                    .into(),
-                "loop".into(),
-            );
-            break;
-        }
-        if count >= 2 {
-            let nudge = format!(
-                "Ya ejecutaste '{tool}' con esos mismos argumentos y el resultado fue idéntico. \
-                 No repitas la misma llamada. Si ya tienes la información necesaria, responde con \
-                 la herramienta 'final'."
-            );
-            emit_tool(app, session_id, step, &tool, &args_str, &nudge, true);
-            convo.push(ChatMsg {
-                role: "user".into(),
-                content: nudge,
-            });
-            continue;
-        }
-
-        // Evaluar permisos según el modo y el riesgo de la herramienta.
-        let risk = registry.risk(&tool);
-        let decision = match risk {
-            Some(r) => permissions::decide(mode, r),
-            None => Decision::Allow, // herramienta desconocida: execute() devolverá error
-        };
-
-        let allowed = match decision {
-            Decision::Allow => true,
-            Decision::Deny => {
-                let msg = format!(
-                    "La herramienta '{tool}' está denegada en el modo actual (plan)."
-                );
-                emit_tool(app, session_id, step, &tool, &args_str, &msg, true);
-                convo.push(ChatMsg {
-                    role: "user".into(),
-                    content: format!("Resultado de {tool} (ERROR):\n{msg}"),
-                });
-                continue;
+            convo.push(AgentMsg::assistant_calls(out.content.clone(), out.tool_calls.clone()));
+            let mut aborted = false;
+            for call in out.tool_calls {
+                let flow = process_call(
+                    app, state, &registry, ctx, mode, session_id, step, &cancel, &mut convo,
+                    &mut seen, &call.name, &call.args, Some(call.id),
+                )
+                .await?;
+                if let CallFlow::Loop = flow {
+                    outcome = (LOOP_MSG.into(), "loop".into());
+                    aborted = true;
+                    break;
+                }
             }
-            Decision::Ask => {
-                request_permission(app, state, session_id, &tool, &args, &cancel).await?
+            if aborted {
+                break;
             }
-        };
-
-        if !allowed {
-            let msg = "El usuario denegó la ejecución de esta herramienta.".to_string();
-            emit_tool(app, session_id, step, &tool, &args_str, &msg, true);
-            convo.push(ChatMsg {
-                role: "user".into(),
-                content: format!("Resultado de {tool} (ERROR):\n{msg}"),
-            });
-            continue;
+        } else {
+            // Ruta GBNF: la llamada llega como objeto JSON en el contenido.
+            let raw = out.content;
+            let (tool, args) = match parse_tool_call(&raw) {
+                Ok(v) => v,
+                Err(e) => {
+                    convo.push(AgentMsg::assistant(raw.clone()));
+                    convo.push(AgentMsg::harness_error(format!(
+                        "Tu respuesta no fue un objeto JSON válido ({e}). Responde con un único objeto JSON con la forma {{\"tool\": ..., \"args\": ...}}."
+                    )));
+                    continue;
+                }
+            };
+            convo.push(AgentMsg::assistant(raw.clone()));
+            if tool == "final" {
+                let text = args.get("text").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                outcome = (text, "done".into());
+                break;
+            }
+            let flow = process_call(
+                app, state, &registry, ctx, mode, session_id, step, &cancel, &mut convo,
+                &mut seen, &tool, &args, None,
+            )
+            .await?;
+            if let CallFlow::Loop = flow {
+                outcome = (LOOP_MSG.into(), "loop".into());
+                break;
+            }
         }
-
-        // Ejecutar herramienta.
-        let (result, is_error) = match registry.execute(&tool, &args, ctx).await {
-            Ok(out) => (out, false),
-            Err(e) => (e.to_string(), true),
-        };
-
-        emit_tool(app, session_id, step, &tool, &args_str, &result, is_error);
-
-        // Reinyectar el resultado como mensaje de usuario (compatible con cualquier plantilla).
-        convo.push(ChatMsg {
-            role: "user".into(),
-            content: format!(
-                "Resultado de {tool}{}:\n{result}",
-                if is_error { " (ERROR)" } else { "" }
-            ),
-        });
     }
 
     // Persistir la sesión (historial completo) tras completar el turno.
@@ -358,30 +381,129 @@ async fn run_inner(
     Ok(outcome)
 }
 
-/// Hace una petición de inferencia con gramática y devuelve el contenido acumulado.
+/// Procesa una única llamada a herramienta: valida args, detecta bucles, evalúa permisos,
+/// ejecuta y reinyecta el resultado. Compartida por las rutas nativa y GBNF. Empuja a `convo`
+/// y actualiza `seen`; devuelve `Loop` si la firma se repitió demasiadas veces.
+#[allow(clippy::too_many_arguments)]
+async fn process_call(
+    app: &AppHandle,
+    state: &Arc<AppState>,
+    registry: &Registry,
+    ctx: &tools::ToolCtx,
+    mode: AgentMode,
+    session_id: &str,
+    step: usize,
+    cancel: &CancellationToken,
+    convo: &mut Vec<AgentMsg>,
+    seen: &mut std::collections::HashMap<String, usize>,
+    tool: &str,
+    args: &Value,
+    call_id: Option<String>,
+) -> AppResult<CallFlow> {
+    let args_str = serde_json::to_string(args).unwrap_or_else(|_| "{}".into());
+
+    // Validar args contra el esquema de la herramienta antes de cualquier otra cosa.
+    if let Err(e) = registry.validate(tool, args) {
+        let msg = format!("argumentos inválidos: {e}");
+        emit_tool(app, session_id, step, tool, &args_str, &msg, true);
+        convo.push(AgentMsg::tool_result(tool, msg, true).with_call_id(call_id));
+        return Ok(CallFlow::Continue);
+    }
+
+    // Detección de bucles: misma herramienta + args repetida.
+    let sig = format!("{tool}:{args_str}");
+    let count = {
+        let c = seen.entry(sig).or_insert(0);
+        *c += 1;
+        *c
+    };
+    if count >= 4 {
+        return Ok(CallFlow::Loop);
+    }
+    if count >= 2 {
+        let nudge = format!(
+            "Ya ejecutaste '{tool}' con esos mismos argumentos y el resultado fue idéntico. \
+             No repitas la misma llamada. Si ya tienes la información necesaria, entrega tu \
+             respuesta final."
+        );
+        emit_tool(app, session_id, step, tool, &args_str, &nudge, true);
+        convo.push(AgentMsg::harness_note(nudge));
+        return Ok(CallFlow::Continue);
+    }
+
+    // Evaluar permisos según el modo y el riesgo de la herramienta.
+    let risk = registry.risk(tool);
+    let decision = match risk {
+        Some(r) => permissions::decide(mode, r),
+        None => Decision::Allow, // herramienta desconocida: execute() devolverá error
+    };
+    let allowed = match decision {
+        Decision::Allow => true,
+        Decision::Deny => {
+            let msg = format!("La herramienta '{tool}' está denegada en el modo actual (plan).");
+            emit_tool(app, session_id, step, tool, &args_str, &msg, true);
+            convo.push(AgentMsg::tool_result(tool, msg, true).with_call_id(call_id));
+            return Ok(CallFlow::Continue);
+        }
+        Decision::Ask => request_permission(app, state, session_id, tool, args, cancel).await?,
+    };
+    if !allowed {
+        let msg = "El usuario denegó la ejecución de esta herramienta.".to_string();
+        emit_tool(app, session_id, step, tool, &args_str, &msg, true);
+        convo.push(AgentMsg::tool_result(tool, msg, true).with_call_id(call_id));
+        return Ok(CallFlow::Continue);
+    }
+
+    // Ejecutar herramienta.
+    let (result, is_error) = match registry.execute(tool, args, ctx).await {
+        Ok(out) => (out, false),
+        Err(e) => (e.to_string(), true),
+    };
+    emit_tool(app, session_id, step, tool, &args_str, &result, is_error);
+    convo.push(AgentMsg::tool_result(tool, result, is_error).with_call_id(call_id));
+
+    // Una escritura o ejecución exitosa cambia el mundo: las firmas previas ya no son evidencia
+    // de bucle (p.ej. releer un archivo tras modificarlo es legítimo).
+    if !is_error && matches!(risk, Some(tools::Risk::Write) | Some(tools::Risk::Exec)) {
+        seen.clear();
+    }
+    Ok(CallFlow::Continue)
+}
+
+/// Hace una petición de inferencia (nativa o con gramática) y devuelve texto + tool-calls.
 #[allow(clippy::too_many_arguments)]
 async fn infer_step(
     client: &reqwest::Client,
     url: &str,
     settings: &Settings,
     max_tokens: usize,
+    native: bool,
     grammar: &str,
-    convo: &[ChatMsg],
+    tools_schema: &Value,
+    convo: &[AgentMsg],
     app: &AppHandle,
     session_id: &str,
     cancel: &CancellationToken,
-) -> AppResult<String> {
-    let body = serde_json::json!({
+) -> AppResult<StepOutput> {
+    let mut body = serde_json::json!({
         "model": "local",
-        "messages": convo,
         "temperature": settings.temperature,
         "top_p": settings.top_p,
         "max_tokens": max_tokens,
         "repeat_penalty": settings.repeat_penalty,
-        "grammar": grammar,
         "stream": true,
         "chat_template_kwargs": { "enable_thinking": settings.enable_thinking },
     });
+    if native {
+        // Ruta nativa: rol `tool` real + esquema de `tools`; el modelo elige cuándo llamarlas.
+        body["messages"] = Value::Array(to_wire_native(convo));
+        body["tools"] = tools_schema.clone();
+        body["tool_choice"] = Value::String("auto".into());
+    } else {
+        // Ruta GBNF: la gramática obliga a un JSON de tool-call válido en el contenido.
+        body["messages"] = serde_json::to_value(to_wire(convo)).unwrap_or_default();
+        body["grammar"] = Value::String(grammar.to_string());
+    }
 
     let resp = client.post(url).json(&body).send().await?;
     if !resp.status().is_success() {
@@ -397,6 +519,7 @@ async fn infer_step(
     let mut stream = resp.bytes_stream();
     let mut buf = String::new();
     let mut content = String::new();
+    let mut acc: Vec<AccCall> = Vec::new();
 
     while let Some(chunk) = stream.next().await {
         if cancel.is_cancelled() {
@@ -412,7 +535,7 @@ async fn infer_step(
             }
             if let Some(data) = line.strip_prefix("data: ") {
                 if data == "[DONE]" {
-                    return Ok(content);
+                    return Ok(build_step_output(content, acc));
                 }
                 if let Ok(parsed) = serde_json::from_str::<ChatChunk>(data) {
                     if let Some(choice) = parsed.choices.first() {
@@ -427,12 +550,64 @@ async fn infer_step(
                                 emit_token(app, session_id, tok, false);
                             }
                         }
+                        if let Some(tcs) = choice.delta.tool_calls.as_ref() {
+                            for tc in tcs {
+                                if tc.index >= acc.len() {
+                                    acc.resize_with(tc.index + 1, AccCall::default);
+                                }
+                                let slot = &mut acc[tc.index];
+                                if let Some(id) = &tc.id {
+                                    if !id.is_empty() {
+                                        slot.id = id.clone();
+                                    }
+                                }
+                                if let Some(f) = &tc.function {
+                                    if let Some(name) = &f.name {
+                                        if !name.is_empty() {
+                                            slot.name = name.clone();
+                                        }
+                                    }
+                                    if let Some(a) = &f.arguments {
+                                        slot.args.push_str(a);
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
     }
-    Ok(content)
+    Ok(build_step_output(content, acc))
+}
+
+/// Convierte los acumuladores de llamadas (fragmentadas en el stream) en `ToolCall` listos.
+fn build_step_output(content: String, acc: Vec<AccCall>) -> StepOutput {
+    let mut tool_calls = Vec::new();
+    for (i, c) in acc.into_iter().enumerate() {
+        if c.name.is_empty() {
+            continue;
+        }
+        let args = if c.args.trim().is_empty() {
+            Value::Object(Default::default())
+        } else {
+            serde_json::from_str(&c.args).unwrap_or_else(|_| Value::Object(Default::default()))
+        };
+        let id = if c.id.is_empty() {
+            format!("call_{i}")
+        } else {
+            c.id
+        };
+        tool_calls.push(ToolCall {
+            id,
+            name: c.name,
+            args,
+        });
+    }
+    StepOutput {
+        content,
+        tool_calls,
+    }
 }
 
 /// Extrae `{tool, args}` de la respuesta del modelo, tolerando texto sobrante.
@@ -482,16 +657,11 @@ fn extract_json_object(s: &str) -> Option<&str> {
     None
 }
 
-/// Estimación conservadora de tokens (sobreestima para no desbordar el contexto).
-fn approx_tokens(s: &str) -> usize {
-    s.len() / 3 + 1
-}
-
 /// Devuelve una copia de la conversación recortada para que quepa en `budget` tokens,
 /// preservando el system prompt (índice 0) y la tarea original (índice 1). `convo` original
 /// no se modifica (conserva el historial completo para persistencia).
-fn budget_view(convo: &[ChatMsg], budget: usize) -> Vec<ChatMsg> {
-    let total = |c: &[ChatMsg]| -> usize {
+fn budget_view(convo: &[AgentMsg], budget: usize) -> Vec<AgentMsg> {
+    let total = |c: &[AgentMsg]| -> usize {
         c.iter().map(|m| approx_tokens(&m.content) + 4).sum()
     };
     if convo.len() <= 3 || total(convo) <= budget {
@@ -506,10 +676,9 @@ fn budget_view(convo: &[ChatMsg], budget: usize) -> Vec<ChatMsg> {
     if removed > 0 {
         view.insert(
             2,
-            ChatMsg {
-                role: "user".into(),
-                content: format!("[… {removed} mensajes anteriores omitidos para ahorrar contexto …]"),
-            },
+            AgentMsg::harness_note(format!(
+                "[… {removed} mensajes anteriores omitidos para ahorrar contexto …]"
+            )),
         );
     }
     view

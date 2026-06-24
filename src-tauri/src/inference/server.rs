@@ -192,6 +192,13 @@ pub async fn start_server(
     cmd.arg("--flash-attn").arg("auto");
     cmd.arg("--batch-size").arg(settings.n_batch.to_string());
 
+    // `--jinja` habilita la plantilla del modelo (rol `tool`, `tool_calls`), requisito del
+    // tool-calling nativo. Solo se omite si el usuario fuerza la ruta GBNF universal, que usa
+    // la plantilla legacy probada.
+    if settings.tool_calling != "grammar" {
+        cmd.arg("--jinja");
+    }
+
     // Cuantización de la caché KV: reduce la memoria del contexto (requiere flash-attn).
     if !settings.cache_type_k.is_empty() && settings.cache_type_k != "f16" {
         cmd.arg("--cache-type-k").arg(&settings.cache_type_k);

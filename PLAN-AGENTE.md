@@ -14,31 +14,83 @@
 
 ## 14. Fase 5 — Profesionalización del harness (backlog priorizado)
 
-Brechas detectadas en revisión externa, ordenadas por impacto sobre el objetivo (agente
-local usable). Las tres primeras son las recomendaciones prioritarias.
+Brechas detectadas en revisión externa y **verificadas contra el código** (2026-06-24).
+Reordenadas por dependencia estructural, no solo por impacto: el modelo de mensaje rico es
+el habilitador que destraba casi todo lo demás, así que va primero.
 
-1. **Schema por herramienta + GBNF por-tool + validación de args** *(en curso)*.
-   Reintroducir el `schema()`/`params()` que se perdió en el refactor de Fase 2. En vez de
-   solo validar después (estilo Claude Code), **generar una gramática por-tool**: el modelo
-   *no puede* emitir args inválidos. Es superior al validar-después para modelos débiles y es
-   el diferenciador local-first. Además, validación estructurada antes de ejecutar como red.
-2. **Compactación con resumen** en vez de `budget_view` (que borra mensajes del medio).
-   Resumir los turnos antiguos conservando objetivos/decisiones (§7).
-3. **Ruta A: tool-calling nativo** (`tools` + `--jinja` + parseo de `delta.tool_calls`),
-   con **selección por capacidad del modelo** (no como mero fallback): nativo para Coder
-   7B+, GBNF por-tool para modelos chicos.
+### Hecho
 
-Adicionales (baratos / seguridad):
-- **`bash`: blacklist de comandos destructivos** y aislamiento (sin red por defecto).
-- **Nudge/parse-error como mensaje de sistema o tool-error tipado**, no como rol `user`
-  (hoy parece que el usuario regaña al modelo).
-- **Detección de bucles consciente de estado**: la firma `tool+args` marca como bucle un
-  `read_file` legítimo tras un `write_file` al mismo path (el mundo cambió). Resetear/relajar
-  cuando una herramienta de escritura tocó el recurso.
+- ✅ **Schema por herramienta + GBNF por-tool + validación de args**. `params()` en el
+  `trait Tool` (`tools/mod.rs:70`), gramática ligada al schema exacto (`grammar.rs:64`) y
+  validación previa como red (`tools/mod.rs:112`). Es el diferenciador local-first y ya está.
+- ✅ **Prioridad 1 — Mensaje rico (`agent/message.rs`).** `enum Role{System,User,Assistant,
+  Tool}` + `AgentMsg{tool_name, tool_call_id, tool_calls, is_error, harness}` y constructores
+  semánticos. Los nudges, errores de parseo y el marcador de compactación pasan a rol `system`
+  (antes `user`); los resultados son mensajes `Tool` de primera clase. Capa `to_wire()` que
+  aísla el formato de cable: en la ruta sin `--jinja` (plantilla legacy) los `Tool` se
+  renderizan como `user` con el encuadre probado, porque el rol `tool` no es seguro en
+  Mistral/Gemma del catálogo — el cambio a rol `tool` real queda en un único punto para la
+  prioridad 3 (que requiere `--jinja`). Frontend (`types.ts`, `AgentView.reconstruct`)
+  sincronizado y compatible con sesiones antiguas.
+- ✅ **Prioridad 2 — Compactación con resumen (`agent/context.rs`).** `maybe_compact` dispara
+  al cruzar el presupuesto: conserva cabecera (system prompt + tarea) y la cola reciente,
+  resume el medio con una llamada dedicada al modelo (no-stream, sin gramática, temp baja,
+  thinking off) y lo sustituye por un único resumen. `budget_view` queda como red de
+  seguridad. Cancelable.
 
-Mayores (acercan a opencode-local):
+- ✅ **Prioridad 3 — Tool-calling nativo.** `--jinja` en `inference/server.rs` (salvo modo
+  `grammar`); `Registry::openai_tools()` emite el esquema `tools`; `infer_step` bifurca por
+  ruta y acumula `delta.tool_calls` del stream (soporta N llamadas/paso); `to_wire_native`
+  usa rol `tool` + `tool_call_id` y asistente con `tool_calls`. **Selección por capacidad**:
+  `Settings.tool_calling` = `auto`|`native`|`grammar`; en `auto`, heurística por familia/tamaño
+  (`use_native_tools`/`auto_native`) — familias fiables → nativo, modelos chicos → GBNF. System
+  prompt mode-aware (`prompt.rs`). Lógica por-llamada unificada en `process_call` (reduce
+  `run_inner`). UI: selector en Ajustes; `AgentView.reconstruct`/done deduplican el texto final.
+
+### Prioridad (orden de ejecución)
+
+1. ✅ Mensaje rico — hecho (ver arriba).
+2. ✅ Compactación con resumen — hecho (ver arriba).
+3. ✅ Tool-calling nativo + selección por capacidad — hecho (ver arriba).
+
+### Baratos / seguridad (en paralelo)
+
+- ✅ **`bash`: blacklist de comandos destructivos** + timeout 60s + truncado (`bash.rs:11`).
+  Pendiente: aislamiento de red por defecto.
+- ✅ **Inyección de contexto de proyecto**: `prompt.rs` lee AGENTS.md/CLAUDE.md del working
+  dir (cap 8000 chars c/u) y los inyecta como «Instrucciones del proyecto» con prioridad.
+- ✅ **Detección de bucles consciente de estado**: tras una ejecución exitosa Write/Exec se
+  resetea el contador de firmas (`agent_loop.rs`), porque una mutación del mundo invalida la
+  evidencia previa de bucle (releer un archivo tras modificarlo deja de marcarse).
+- **grep con regex / ripgrep**: hoy es `walk_files` + `contains` literal recorriendo todo el
+  árbol sin `.gitignore` (`grep.rs:40`).
+
+### Panel del agente (Skills / Conexiones / Contexto)
+
+- ✅ **Skills** — paquetes de instrucciones+recursos (`agent/skills.rs`): carpetas
+  `data_dir/agent-aleph/skills/<slug>/SKILL.md` (frontmatter + cuerpo), estado activo en
+  `enabled.json`. Comandos list/create/import/delete/toggle/read. Las skills *activas* se
+  inyectan en el system prompt bajo «Conocimiento especializado» (cap 6000 chars). UI funcional
+  en `AgentPanel` (lista, toggle, crear/importar/borrar).
+- ✅ **Contexto adjunto** — `read_context_file` + store compartido `agentContext.svelte.ts`;
+  `AgentPanel` adjunta archivos/texto, `AgentView.send` antepone el bloque al input del turno.
+- ⏳ **Conexiones** (GitHub/Google) — maqueta «próximamente» en el panel; la integración real
+  (red + OAuth/token, fuera del local-first actual) queda pendiente.
+
+### Mayores (acercan a opencode-local)
+
 - Subagentes (Task/`@general`), MCP, slash commands (`/commit`, `/review`, `/compact`),
   diff real en la UI de permisos, métricas (tok/s, pasos, contexto usado).
+
+### Notas de calidad de código (refactor oportunista)
+
+- ✅ `run_inner` aligerado: la lógica por-llamada (validar/bucle/permiso/ejecutar) vive ahora
+  en `process_call`, compartida por ambas rutas. Queda margen para extraer el armado de la
+  petición y el manejo del stream si crece más.
+- `budget_view` usa `view.remove(2)` en bucle (O(n²)); irrelevante en sesiones chicas pero se
+  reemplaza al implementar la compactación (prioridad 2).
+- `walk_files` relee el árbol entero (hasta 5000 archivos, depth 12) en cada grep/glob sin
+  caché ni `.gitignore`.
 
 ---
 

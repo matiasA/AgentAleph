@@ -2,6 +2,7 @@
   import { api } from "../lib/api";
   import type { CatalogModel, HfModel, HfFile } from "../lib/types";
   import ModelCard from "./ModelCard.svelte";
+  import Select from "./Select.svelte";
 
   let {
     onDownload,
@@ -21,12 +22,55 @@
   let loadingFiles = $state(false);
   let filesError = $state<string | null>(null);
 
+  // Explorar HF (todos los modelos GGUF, sin query)
+  let view = $state<"catalog" | "browse">("catalog");
+  let sort = $state("downloads");
+  let browseResults = $state<HfModel[]>([]);
+  let browsing = $state(false);
+  let browseLoaded = $state(false);
+  let browseLimit = $state(40);
+
+  const sortOptions = [
+    { value: "downloads", label: "Más descargados" },
+    { value: "likes", label: "Más gustados" },
+    { value: "trendingScore", label: "Tendencia" },
+    { value: "lastModified", label: "Recientes" },
+  ];
+
   $effect(() => {
     api.listCatalog().then((c) => {
       catalog = c;
       loading = false;
     });
   });
+
+  async function doBrowse(reset = true) {
+    if (reset) browseLimit = 40;
+    browsing = true;
+    browseLoaded = true;
+    try {
+      browseResults = await api.browseHf(sort, browseLimit);
+    } catch (e) {
+      browseResults = [];
+    } finally {
+      browsing = false;
+    }
+  }
+
+  async function loadMore() {
+    browseLimit += 40;
+    await doBrowse(false);
+  }
+
+  function setView(v: "catalog" | "browse") {
+    view = v;
+    if (v === "browse" && !browseLoaded) doBrowse();
+  }
+
+  function changeSort(v: string) {
+    sort = v;
+    doBrowse();
+  }
 
   async function doSearch() {
     if (!query.trim()) {
@@ -130,6 +174,19 @@
     </div>
   </div>
 {:else}
+  {#snippet hfRow(m: HfModel)}
+    <div class="hf-row" role="button" tabindex="0" onclick={() => openHf(m)}>
+      <div class="col" style="flex:1;min-width:0">
+        <div class="hf-name">{m.name}</div>
+        <div class="dim small">{m.author}</div>
+      </div>
+      <div class="col" style="align-items:flex-end;flex:none">
+        <div class="dim small">{(m.downloads / 1000).toFixed(1)}k ↓</div>
+        <div class="dim small">{m.likes} ♥</div>
+      </div>
+    </div>
+  {/snippet}
+
   <div class="col" style="flex:1;overflow:hidden">
     <div class="search-box">
       <input
@@ -139,38 +196,63 @@
         onkeydown={onKeydown}
       />
       <button onclick={doSearch} disabled={searching}>
-        {searching ? "..." : "Buscar"}
+        {searching ? "…" : "Buscar"}
+      </button>
+    </div>
+
+    <div class="segmented">
+      <button class:active={view === "catalog"} onclick={() => setView("catalog")}>
+        Catálogo
+      </button>
+      <button class:active={view === "browse"} onclick={() => setView("browse")}>
+        Explorar HF
       </button>
     </div>
 
     {#if searched}
       <div class="scroll" style="padding:8px 10px">
         <div class="small muted" style="margin-bottom:6px">
-          {searchResults.length} resultado(s) HF Hub
+          {searchResults.length} resultado(s) en HF Hub
         </div>
         {#each searchResults as m (m.repo)}
-          <div class="hf-row" onclick={() => openHf(m)}>
-            <div class="col" style="flex:1;min-width:0">
-              <div style="font-weight:500">{m.name}</div>
-              <div class="dim small">{m.author}</div>
-            </div>
-            <div class="col" style="align-items:flex-end">
-              <div class="dim small">{(m.downloads / 1000).toFixed(1)}k dl</div>
-              <div class="dim small">{m.likes} ♥</div>
-            </div>
-          </div>
+          {@render hfRow(m)}
         {/each}
       </div>
-    {:else if loading}
-      <div class="muted small" style="padding:10px">Cargando catálogo...</div>
-    {:else}
-      <div class="scroll" style="padding:8px 10px">
-        {#each groupedCatalog as group (group.category)}
-          <div class="section-label">{group.category}</div>
-          {#each group.models as m (m.id)}
-            <ModelCard model={m} onDownload={downloadFromCatalog} />
+    {:else if view === "catalog"}
+      {#if loading}
+        <div class="muted small" style="padding:10px">Cargando catálogo…</div>
+      {:else}
+        <div class="scroll" style="padding:8px 10px">
+          {#each groupedCatalog as group (group.category)}
+            <div class="section-label">{group.category}</div>
+            {#each group.models as m (m.id)}
+              <ModelCard model={m} onDownload={downloadFromCatalog} />
+            {/each}
           {/each}
-        {/each}
+        </div>
+      {/if}
+    {:else}
+      <div class="browse-bar">
+        <span class="small muted">Todos los GGUF del Hub</span>
+        <div class="sort-wrap">
+          <Select value={sort} options={sortOptions} onChange={changeSort} />
+        </div>
+      </div>
+      <div class="scroll" style="padding:8px 10px">
+        {#if browsing && browseResults.length === 0}
+          <div class="muted small" style="padding:10px">Cargando modelos…</div>
+        {:else if browseResults.length === 0}
+          <div class="muted small" style="padding:10px">Sin resultados.</div>
+        {:else}
+          {#each browseResults as m (m.repo)}
+            {@render hfRow(m)}
+          {/each}
+          {#if browseResults.length >= browseLimit}
+            <button class="ghost loadmore" onclick={loadMore} disabled={browsing}>
+              {browsing ? "Cargando…" : "Cargar más"}
+            </button>
+          {/if}
+        {/if}
       </div>
     {/if}
   </div>
@@ -181,7 +263,54 @@
     display: flex;
     gap: 6px;
     padding: 8px 10px;
-    border-bottom: 1px solid var(--border);
+  }
+  .segmented {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px;
+    margin: 0 10px 6px;
+    padding: 3px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+  }
+  .segmented button {
+    border: none;
+    background: transparent;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 12px;
+    color: var(--text-1);
+  }
+  .segmented button:hover {
+    background: var(--bg-hover);
+  }
+  .segmented button.active {
+    background: var(--accent);
+    color: var(--accent-contrast);
+    font-weight: 600;
+  }
+  .browse-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 10px 8px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .sort-wrap {
+    width: 170px;
+    flex: none;
+  }
+  .hf-name {
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .loadmore {
+    width: 100%;
+    margin-top: 4px;
   }
   .section-label {
     font-size: 10px;

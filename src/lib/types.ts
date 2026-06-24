@@ -62,6 +62,8 @@ export interface Settings {
   use_mmap: boolean;
   use_mlock: boolean;
   extra_model_dirs: string[];
+  /** Estrategia de tool-calling del agente: "auto" | "native" | "grammar". */
+  tool_calling: string;
 }
 
 export interface GpuDevice {
@@ -91,6 +93,36 @@ export interface ChatMsg {
   content: string;
 }
 
+export interface ToolCall {
+  id: string;
+  name: string;
+  args: any;
+}
+
+/** Mensaje rico de la conversación del agente (espejo de Rust `agent::message::AgentMsg`). */
+export interface AgentMsg {
+  role: "system" | "user" | "assistant" | "tool";
+  content: string;
+  tool_name?: string;
+  tool_call_id?: string;
+  tool_calls?: ToolCall[];
+  is_error?: boolean;
+  harness?: boolean;
+}
+
+export interface Skill {
+  slug: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+}
+
+export interface ContextFile {
+  name: string;
+  content: string;
+  truncated: boolean;
+}
+
 export interface SessionMeta {
   id: string;
   title: string;
@@ -105,7 +137,7 @@ export interface StoredSession {
   mode: string;
   created: string;
   updated: string;
-  messages: ChatMsg[];
+  messages: AgentMsg[];
 }
 
 export interface ChatTokenEvent {

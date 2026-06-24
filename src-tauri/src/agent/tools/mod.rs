@@ -107,6 +107,45 @@ impl Registry {
         self.tools.iter().find(|t| t.name() == name).map(|t| t.risk())
     }
 
+    /// Esquema de herramientas en formato OpenAI (`tools`) para la ruta de tool-calling nativo.
+    pub fn openai_tools(&self) -> Value {
+        let tools: Vec<Value> = self
+            .tools
+            .iter()
+            .map(|t| {
+                let mut props = serde_json::Map::new();
+                let mut required: Vec<Value> = Vec::new();
+                for p in t.params() {
+                    let ty = match p.ty {
+                        ParamType::Str => "string",
+                        ParamType::Int => "integer",
+                        ParamType::Bool => "boolean",
+                    };
+                    props.insert(
+                        p.name.to_string(),
+                        serde_json::json!({ "type": ty }),
+                    );
+                    if p.required {
+                        required.push(Value::String(p.name.to_string()));
+                    }
+                }
+                serde_json::json!({
+                    "type": "function",
+                    "function": {
+                        "name": t.name(),
+                        "description": t.description(),
+                        "parameters": {
+                            "type": "object",
+                            "properties": Value::Object(props),
+                            "required": required,
+                        }
+                    }
+                })
+            })
+            .collect();
+        Value::Array(tools)
+    }
+
     /// Valida los args contra el esquema de la herramienta antes de ejecutar.
     /// Devuelve un error legible para reinyectar al modelo si algo no cuadra.
     pub fn validate(&self, name: &str, args: &Value) -> Result<(), String> {

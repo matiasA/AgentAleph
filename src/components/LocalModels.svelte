@@ -203,19 +203,22 @@
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    padding: 10px;
-    border: 1px solid var(--border);
+    padding: 10px 11px;
+    border: 1px solid transparent;
     border-radius: var(--radius);
-    margin-bottom: 7px;
+    margin-bottom: 6px;
     background: var(--bg-2);
     transition: border-color var(--t-fast), background var(--t-fast);
+  }
+  .local-row:hover {
+    background: var(--bg-3);
   }
   .local-row.active {
     border-color: var(--accent-border);
     background: var(--accent-bg);
   }
-  .local-row:hover {
-    border-color: var(--border-strong);
+  .local-row.active:hover {
+    background: var(--accent-bg-strong);
   }
   .name {
     font-weight: 500;

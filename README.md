@@ -1,8 +1,14 @@
+<p align="center"><img src="docs/logo.svg" alt="Agent Aleph" width="96" /></p>
+
 # Agent Aleph
 
 > **Un agente de codificación que corre 100% en tu máquina.** Descargás un modelo, lo
 > cargás con un clic y le pedís que lea, escriba y ejecute en tu proyecto — sin nube, sin
 > API keys, sin cuentas. Todo local, todo simple.
+
+<p align="center">
+  <img src="docs/screenshot.png" alt="Agent Aleph — modo Agente con el panel de Skills, Conexiones y Contexto" width="900" />
+</p>
 
 Agent Aleph junta dos mitades en una sola app de escritorio:
 
@@ -26,27 +32,42 @@ bundle.
   servidores ni endpoints.
 - 🛡️ **Seguro por defecto.** Permisos *allow / ask / deny* por herramienta y un **modo plan**
   de solo lectura que no toca el disco.
-- ⚡ **Pensado para modelos locales imperfectos.** Gramática GBNF para tool-calls siempre
-  válidos, detección de bucles y gestión agresiva de contexto.
+- ⚡ **Pensado para modelos locales imperfectos.** Gramática GBNF (o tool-calling nativo si
+  el modelo lo soporta bien) para tool-calls siempre válidos, detección de bucles y
+  compactación de contexto con resumen.
+- 🧩 **Extensible con skills.** Sumale conocimiento especializado al agente con paquetes de
+  instrucciones locales, sin tocar código.
 
 ---
 
 ## Características
 
 ### Agente
-- **Bucle de agente** con tope de pasos y detección de bucles (no se cuelga repitiendo).
+- **Bucle de agente** con tope de pasos y detección de bucles consciente de estado (una
+  escritura exitosa resetea el contador: releer un archivo que el propio agente acaba de
+  modificar no se confunde con repetirse).
 - **7 herramientas**: `read_file`, `list`, `glob`, `grep`, `write_file`, `edit`, `bash`.
+- **Tool-calling con selección automática por modelo**: nativo (`tools` + `--jinja` +
+  `delta.tool_calls`, varias herramientas por paso) para modelos capaces, o **gramática
+  GBNF** por-herramienta (el modelo no puede emitir argumentos mal formados) como ruta
+  universal para modelos chicos. Configurable en *Ajustes* (`auto` / `nativo` / `GBNF`).
 - **Permisos por herramienta** (`allow` / `ask` / `deny`) con confirmación en la UI antes de
   escribir o ejecutar.
 - **Modos build / plan**: *build* opera con todo; *plan* es solo lectura (niega edits).
 - **Working directory de sesión**: las herramientas de archivo se restringen a la carpeta
   que elegís.
-- **Tool-calls garantizados** vía gramática **GBNF** (el modelo no puede emitir argumentos
-  mal formados) + validación de schema.
+- **Contexto de proyecto automático**: si el repo tiene `AGENTS.md` o `CLAUDE.md`, se inyectan
+  en el system prompt con prioridad, igual que Claude Code / opencode.
+- **Compactación con resumen**: al acercarse al límite de contexto, el harness resume los
+  turnos antiguos (conservando objetivos y decisiones) en vez de simplemente borrarlos.
+- **Skills**: paquetes locales de instrucciones + recursos (`SKILL.md`) que activás/desactivás
+  desde el panel del agente para darle conocimiento especializado a una tarea.
+- **Contexto adjunto**: arrastrá archivos o pegá texto en el panel del agente para sumarlos
+  al turno sin tener que pedirle al modelo que los lea.
 - **Sesiones persistentes** con memoria entre turnos.
 
 ### Modelos
-- **Catálogo curado** (Llama 3.2, Qwen, Phi 3.5, Mistral, Gemma…) + búsqueda libre en HF Hub.
+- **Catálogo curado** (Qwen 3.5 / 3.6, Llama 4, Phi-4, Gemma 4, Mistral…) + búsqueda libre en HF Hub.
 - **Descarga con progreso** (velocidad, cancelable) de archivos GGUF.
 - **Carga con progreso en %** y barra en vivo durante la inicialización del modelo.
 - **Gestión local**: listar, cargar, expulsar, eliminar; carpetas de modelos externas.
@@ -126,15 +147,21 @@ en el sistema.
 
 ## Modelos recomendados según hardware
 
-| Hardware | Modelo (Q4_K_M) | Tamaño |
-|----------|-----------------|--------|
-| 8 GB RAM, CPU | Llama 3.2 1B / Qwen 0.5–1B | ~0.7–0.8 GB |
-| 16 GB RAM, CPU | Qwen 2.5 3B / Phi 3.5 mini | ~2 GB |
-| 16 GB RAM + GPU 8 GB | Qwen 2.5 7B / Llama 3.1 8B | ~4.5–5 GB |
-| 32 GB+ RAM | Coder 7B+ con contexto largo | ~5 GB+ |
+> Actualizado a **junio de 2026**. Generaciones vigentes: **Qwen 3.5 / 3.6**,
+> **Gemma 4**, **Llama 4**, **Phi-4**. Tamaños aproximados para cuantización **Q4_K_M**.
 
-Para el **modo agente** conviene un modelo *coder* de 7B o más; los muy chicos sirven para
-probar el flujo pero fallan más en tareas reales.
+| Hardware | Modelo recomendado (Q4_K_M) | Tamaño aprox. |
+|----------|-----------------------------|---------------|
+| 8 GB RAM, CPU | Qwen 3.5 0.8B / Gemma 4 (mini) | ~0.6–1 GB |
+| 16 GB RAM, CPU | Qwen 3.5 4B / Phi-4 mini | ~2.5 GB |
+| 16 GB RAM + GPU 8 GB | Qwen 3.5 9B / Llama 4 8B | ~5 GB |
+| 24–32 GB RAM/VRAM | Qwen 3.5 Coder 14B / Gemma 4 12B | ~8–9 GB |
+| 32 GB+ RAM (MoE) | Qwen 3.6 35B-A3B *(MoE, ~3B activos → rápido)* | ~18–20 GB |
+
+Para el **modo agente** conviene un modelo *coder* (p. ej. **Qwen 3.5 Coder 14B**) o un
+**MoE** como **Qwen 3.6 35B-A3B**, que rinde como un modelo grande pero corre rápido porque
+solo activa ~3B de parámetros por token. Los modelos muy chicos (≤1B) sirven para probar el
+flujo, pero fallan más en tareas reales.
 
 ---
 
@@ -149,16 +176,19 @@ probar el flujo pero fallan más en tareas reales.
 
 ## Estado y hoja de ruta
 
-El núcleo del agente (bucle + herramientas + permisos + modos + GBNF + contexto +
-persistencia) está implementado. El backlog priorizado vive en
-[`PLAN-AGENTE.md`](./PLAN-AGENTE.md): schema/GBNF por-herramienta, compactación con resumen,
-tool-calling nativo (`--jinja`), subagentes y métricas.
+El núcleo del agente está implementado: bucle + 7 herramientas + permisos + modos + mensaje
+rico + GBNF/tool-calling nativo con selección por modelo + compactación con resumen +
+contexto de proyecto + skills + contexto adjunto + persistencia de sesiones. El backlog
+priorizado vive en [`PLAN-AGENTE.md`](./PLAN-AGENTE.md): conexiones reales (GitHub/Google),
+subagentes, MCP, slash commands, diff en la UI de permisos y métricas (tok/s, contexto usado).
 
 ### Limitaciones actuales
 - Una sesión de chat a la vez; un modelo cargado a la vez.
 - Sin API OpenAI-compatible expuesta hacia afuera (llama-server es solo interno).
 - Sin vision/multimodal.
 - Bundle solo Linux x64 (Windows/Mac requieren su propio binario de `llama-server`).
+- **Conexiones** (GitHub, Google) se ven en el panel del agente pero son un placeholder:
+  integrarlas requiere red + OAuth, fuera del alcance 100% local actual.
 
 ---
 

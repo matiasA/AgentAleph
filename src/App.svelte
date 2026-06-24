@@ -7,9 +7,11 @@
   import AgentView from "./components/AgentView.svelte";
   import AgentPanel from "./components/AgentPanel.svelte";
   import StatusBar from "./components/StatusBar.svelte";
+  import TitleBar from "./components/TitleBar.svelte";
   import Icon from "./components/Icon.svelte";
 
   let mode = $state<"chat" | "agent">("chat");
+  let sidebarOpen = $state(true);
 
   let status = $state<ModelStatus>({
     loaded: false,
@@ -79,7 +81,15 @@
   }
 </script>
 
-<div class="app">
+<div class="shell">
+  <TitleBar
+    {status}
+    {loadProgress}
+    {pendingDownloads}
+    onToggleSidebar={() => (sidebarOpen = !sidebarOpen)}
+  />
+
+  <div class="app" class:sidebar-collapsed={!sidebarOpen}>
   <aside class="app__sidebar">
     <Sidebar
       {status}
@@ -115,6 +125,7 @@
   <footer class="app__statusbar">
     <StatusBar {status} {info} {pendingDownloads} {loadProgress} />
   </footer>
+  </div>
 </div>
 
 <style>

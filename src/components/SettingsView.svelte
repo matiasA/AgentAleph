@@ -9,6 +9,12 @@
     { value: "q4_0", label: "q4_0 (~75% memoria)" },
   ];
 
+  const toolCallingOptions = [
+    { value: "auto", label: "auto (según el modelo)" },
+    { value: "native", label: "nativo (tools + jinja)" },
+    { value: "grammar", label: "GBNF (gramática, universal)" },
+  ];
+
   let {
     onSaved,
   }: { onSaved?: () => void } = $props();
@@ -157,6 +163,17 @@
           <input type="checkbox" bind:checked={s.enable_thinking} class="checkbox" />
           <span>Modo thinking <span class="dim">(razonamiento visible, modelos Qwen/Phi)</span></span>
         </label>
+      </div>
+
+      <div class="section-title">Agente</div>
+      <div class="field">
+        <label>Tool-calling <span class="dim">(cómo invoca herramientas el agente)</span></label>
+        <Select bind:value={s.tool_calling} options={toolCallingOptions} />
+        <div class="dim small" style="margin-top:4px">
+          <strong>auto</strong>: nativo para modelos capaces (Coder/Qwen/Llama 3.1+…), GBNF para
+          los chicos. <strong>GBNF</strong> fuerza la gramática (más robusto en modelos débiles).
+          Se aplica al <strong>recargar el modelo</strong>.
+        </div>
       </div>
 
       <div class="note small muted">

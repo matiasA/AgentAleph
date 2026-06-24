@@ -6,30 +6,34 @@
    ============================================================================ */
 
 :root {
-  /* — superficies — (base "Anysphere Dark" de Cursor: gris plano #181818
-     separado por bordes, no negro puro) */
-  --bg-0: #181818; /* lienzo principal / chat (editor.background) */
-  --bg-1: #181818; /* sidebar / paneles — plano como Anysphere */
-  --bg-2: #1f1f1f; /* tarjetas (ligeramente elevadas para que se lean) */
-  --bg-3: #242424; /* tarjetas elevadas / menús (dropdown.background) */
-  --bg-hover: #2a282a; /* list.hoverBackground */
-  --bg-active: #2f2f2f;
-  --bg-input: #212121; /* input.background */
+  /* — superficies — (base "Zed Dark" muestreada: jet black / charcoal blue,
+     jerarquía por elevación sutil — 1-2 tonos de luminosidad entre zonas) */
+  --bg-0: #282c33; /* lienzo principal / chat (jet black) */
+  --bg-1: #2c313a; /* sidebar / paneles (jet black, +1 tono) */
+  --bg-2: #333945; /* tarjetas — elevadas sobre bg-1 (charcoal) */
+  --bg-3: #3a404c; /* menús / elevado mayor (charcoal blue) */
+  --bg-hover: #3a404c; /* list.hoverBackground */
+  --bg-active: #434a57; /* charcoal blue claro */
+  --bg-input: #2c313a; /* input.background */
 
-  --border: #2c2c2c;
-  --border-soft: #242424;
-  --border-strong: #383838; /* panel.border */
+  --border: #3b414d; /* charcoal blue */
+  --border-soft: #2f343d; /* border sutil */
+  --border-strong: #4d5563; /* charcoal blue claro */
 
   /* — texto — */
-  --text-0: #d6d6dd; /* foreground */
-  --text-1: #9b9ba6;
-  --text-2: #6d6d6d; /* comment / muted */
-  --text-3: #565656;
+  --text-0: #c5c9d3; /* text.default */
+  --text-1: #8b909d;
+  --text-2: #6b7280; /* muted / icon.default */
+  --text-3: #4a4f5c; /* text.muted */
+
+  /* — iconos — */
+  --icon-default: #6b7280;
+  --icon-active: #a0a4af;
 
   /* — acento (sobre-escrito por [data-accent]) — */
-  --accent: #228df2; /* azul Anysphere */
-  --accent-2: #359dff; /* button.hoverBackground */
-  --accent-contrast: #eaf2fc;
+  --accent: #4d7fff; /* azul Zed (accent.default) */
+  --accent-2: #6b94ff; /* accent.hover */
+  --accent-contrast: #eaf1ff;
 
   /* derivados del acento (compartidos por todos los tonos) */
   --accent-bg: color-mix(in srgb, var(--accent) 13%, transparent);
@@ -47,8 +51,8 @@
   --error-bg: color-mix(in srgb, var(--error) 14%, transparent);
 
   /* — tipografía — */
-  --sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --sans: "Noto Sans", "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: "JetBrains Mono", "SF Mono", "Cascadia Code", "Fira Code", Menlo,
     Consolas, "Liberation Mono", monospace;
 
@@ -72,7 +76,7 @@
 
 /* ---------- Tonos (acentos) — el azul es el de Anysphere; los demás son
    variantes que armonizan con la base gris ---------- */
-[data-accent="blue"]    { --accent: #228df2; --accent-2: #359dff; --accent-contrast: #eaf2fc; }
+[data-accent="blue"]    { --accent: #4d7fff; --accent-2: #6b94ff; --accent-contrast: #eaf1ff; } /* azul Zed */
 [data-accent="indigo"]  { --accent: #aaa0fa; --accent-2: #c2bbff; --accent-contrast: #0e0c1c; } /* lavanda Anysphere */
 [data-accent="emerald"] { --accent: #83d6c5; --accent-2: #a3e3d6; --accent-contrast: #04140f; } /* teal Anysphere */
 [data-accent="amber"]   { --accent: #e3b341; --accent-2: #f0c764; --accent-contrast: #1a1203; }
@@ -272,12 +276,24 @@ textarea {
 }
 
 /* ===================== Layout ===================== */
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+}
+
 .app {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr) 320px;
   grid-template-rows: minmax(0, 1fr) 26px;
-  height: 100vh;
-  width: 100vw;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  transition: grid-template-columns var(--t);
+}
+.app.sidebar-collapsed {
+  grid-template-columns: 0 minmax(0, 1fr) 320px;
 }
 
 .app__sidebar {
@@ -287,6 +303,9 @@ textarea {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+.app.sidebar-collapsed .app__sidebar {
+  border-right-color: transparent;
 }
 
 .app__main {

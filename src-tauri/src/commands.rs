@@ -36,6 +36,11 @@ pub async fn search_hf(query: String) -> AppResult<Vec<models::HfModel>> {
 }
 
 #[tauri::command]
+pub async fn browse_hf(sort: String, limit: u32) -> AppResult<Vec<models::HfModel>> {
+    models::browse_hf(&sort, limit).await
+}
+
+#[tauri::command]
 pub async fn list_model_files(repo: String) -> AppResult<Vec<models::HfFile>> {
     models::list_model_files(&repo).await
 }
@@ -287,6 +292,72 @@ pub async fn get_app_info(
 #[tauri::command]
 pub async fn list_gpus() -> AppResult<Vec<inference::GpuDevice>> {
     inference::list_gpu_devices().await
+}
+
+// ---------- Skills ----------
+
+#[tauri::command]
+pub async fn list_skills() -> AppResult<Vec<crate::agent::skills::Skill>> {
+    Ok(crate::agent::skills::list())
+}
+
+#[tauri::command]
+pub async fn set_skill_enabled(slug: String, enabled: bool) -> AppResult<()> {
+    crate::agent::skills::set_enabled(&slug, enabled)
+}
+
+#[tauri::command]
+pub async fn create_skill(
+    name: String,
+    description: String,
+    body: String,
+) -> AppResult<crate::agent::skills::Skill> {
+    crate::agent::skills::create(&name, &description, &body)
+}
+
+#[tauri::command]
+pub async fn import_skill(folder: String) -> AppResult<crate::agent::skills::Skill> {
+    crate::agent::skills::import(&folder)
+}
+
+#[tauri::command]
+pub async fn delete_skill(slug: String) -> AppResult<()> {
+    crate::agent::skills::delete(&slug)
+}
+
+#[tauri::command]
+pub async fn read_skill(slug: String) -> AppResult<String> {
+    crate::agent::skills::read_full(&slug)
+}
+
+// ---------- Contexto adjunto ----------
+
+/// Contenido de un archivo adjunto al contexto del turno (truncado).
+#[derive(serde::Serialize)]
+pub struct ContextFile {
+    pub name: String,
+    pub content: String,
+    pub truncated: bool,
+}
+
+/// Lee un archivo para adjuntarlo al contexto del agente (cap de tamaño).
+#[tauri::command]
+pub async fn read_context_file(path: String) -> AppResult<ContextFile> {
+    const MAX: usize = 20_000;
+    let p = std::path::PathBuf::from(&path);
+    let name = p
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.clone());
+    let raw = std::fs::read_to_string(&p)
+        .map_err(|e| crate::error::AppError::Other(format!("no se pudo leer {name}: {e}")))?;
+    let truncated = raw.len() > MAX;
+    let content: String = raw.chars().take(MAX).collect();
+    Ok(ContextFile {
+        name,
+        content,
+        truncated,
+    })
 }
 
 #[allow(dead_code)]

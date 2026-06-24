@@ -22,6 +22,7 @@
     agent: `<rect x="4" y="7" width="16" height="12" rx="3"/><path d="M9 2v3M15 2v3M2 12h2M20 12h2"/><circle cx="9" cy="13" r="1.2"/><circle cx="15" cy="13" r="1.2"/>`,
     send: `<path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/>`,
     plus: `<path d="M12 5v14M5 12h14"/>`,
+    menu: `<path d="M3 6h18M3 12h18M3 18h18"/>`,
     sliders: `<path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>`,
     paperclip: `<path d="M21 11.5 12.5 20a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.6 1.6 0 0 1-2.3-2.3l7.8-7.8"/>`,
     "chevron-right": `<path d="m9 6 6 6-6 6"/>`,

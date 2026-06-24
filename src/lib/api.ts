@@ -13,12 +13,16 @@ import type {
   ModelStatus,
   SessionMeta,
   Settings,
+  Skill,
+  ContextFile,
   StoredSession,
 } from "./types";
 
 export const api = {
   listCatalog: () => invoke<CatalogModel[]>("list_catalog_models"),
   searchHf: (q: string) => invoke<HfModel[]>("search_hf", { query: q }),
+  browseHf: (sort: string, limit: number) =>
+    invoke<HfModel[]>("browse_hf", { sort, limit }),
   listModelFiles: (repo: string) => invoke<HfFile[]>("list_model_files", { repo }),
   listLocal: () => invoke<LocalModel[]>("list_local_models"),
   listModelDirs: () => invoke<string[]>("list_model_dirs"),
@@ -47,6 +51,17 @@ export const api = {
   saveSettings: (s: Settings) => invoke<void>("save_settings", { settings: s }),
   getAppInfo: () => invoke<AppInfo>("get_app_info"),
   listGpus: () => invoke<GpuDevice[]>("list_gpus"),
+  // Skills (paquetes de instrucciones especializadas para el agente).
+  listSkills: () => invoke<Skill[]>("list_skills"),
+  setSkillEnabled: (slug: string, enabled: boolean) =>
+    invoke<void>("set_skill_enabled", { slug, enabled }),
+  createSkill: (name: string, description: string, body: string) =>
+    invoke<Skill>("create_skill", { name, description, body }),
+  importSkill: (folder: string) => invoke<Skill>("import_skill", { folder }),
+  deleteSkill: (slug: string) => invoke<void>("delete_skill", { slug }),
+  readSkill: (slug: string) => invoke<string>("read_skill", { slug }),
+  // Contexto adjunto al turno del agente.
+  readContextFile: (path: string) => invoke<ContextFile>("read_context_file", { path }),
 };
 
 export async function onDownloadProgress(

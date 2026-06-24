@@ -35,6 +35,12 @@ pub struct Settings {
     /// Carpetas externas (fuera de models_dir) donde también buscar GGUF.
     #[serde(default)]
     pub extra_model_dirs: Vec<String>,
+    /// Estrategia de tool-calling del agente:
+    /// - `"auto"`: nativo si el modelo cargado lo soporta de forma fiable, GBNF si no.
+    /// - `"native"`: siempre `tools` + `--jinja` + parseo de `delta.tool_calls`.
+    /// - `"grammar"`: siempre la gramática GBNF por-tool (ruta universal, sin `--jinja`).
+    #[serde(default = "default_tool_calling")]
+    pub tool_calling: String,
 }
 
 impl Default for Settings {
@@ -57,8 +63,13 @@ impl Default for Settings {
             use_mmap: default_true(),
             use_mlock: false,
             extra_model_dirs: Vec::new(),
+            tool_calling: default_tool_calling(),
         }
     }
+}
+
+fn default_tool_calling() -> String {
+    "auto".into()
 }
 
 fn num_threads() -> u32 {

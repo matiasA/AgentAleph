@@ -31,6 +31,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::list_catalog_models,
             commands::search_hf,
+            commands::browse_hf,
             commands::list_model_files,
             commands::list_local_models,
             commands::list_model_dirs,
@@ -54,6 +55,13 @@ pub fn run() {
             commands::save_settings,
             commands::get_app_info,
             commands::list_gpus,
+            commands::list_skills,
+            commands::set_skill_enabled,
+            commands::create_skill,
+            commands::import_skill,
+            commands::delete_skill,
+            commands::read_skill,
+            commands::read_context_file,
         ])
         .setup(|app| {
             let state: tauri::State<'_, Arc<AppState>> = app.state();

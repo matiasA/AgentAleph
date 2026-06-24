@@ -256,34 +256,52 @@ pub async fn search_hf(query: &str) -> AppResult<Vec<HfModel>> {
         .build()?;
     let resp = client.get(&url).send().await?;
     let raw: Vec<serde_json::Value> = resp.json().await?;
+    Ok(raw.into_iter().filter_map(parse_hf_model).collect())
+}
 
-    let out = raw
-        .into_iter()
-        .filter_map(|v| {
-            let id = v.get("id")?.as_str()?.to_string();
-            let (author, name) = match id.split_once('/') {
-                Some((a, n)) => (a.to_string(), n.to_string()),
-                None => ("".into(), id.clone()),
-            };
-            Some(HfModel {
-                repo: id,
-                author,
-                name,
-                downloads: v.get("downloads").and_then(|d| d.as_u64()).unwrap_or(0),
-                likes: v.get("likes").and_then(|d| d.as_u64()).unwrap_or(0),
-                tags: v
-                    .get("tags")
-                    .and_then(|t| t.as_array())
-                    .map(|a| {
-                        a.iter()
-                            .filter_map(|x| x.as_str().map(String::from))
-                            .collect()
-                    })
-                    .unwrap_or_default(),
-            })
-        })
-        .collect();
-    Ok(out)
+/// Explora TODOS los modelos GGUF del Hub (sin query), ordenados según `sort`.
+/// `sort` admite: "downloads" | "likes" | "trendingScore" | "lastModified".
+/// `limit` se acota a [1, 200]. Para "paginar" se vuelve a pedir con más límite.
+pub async fn browse_hf(sort: &str, limit: u32) -> AppResult<Vec<HfModel>> {
+    let sort = match sort {
+        "likes" => "likes",
+        "trendingScore" | "trending" => "trendingScore",
+        "lastModified" | "recent" => "lastModified",
+        _ => "downloads",
+    };
+    let limit = limit.clamp(1, 200);
+    let url = format!(
+        "https://huggingface.co/api/models?filter=gguf&limit={}&sort={}&direction=-1",
+        limit, sort
+    );
+    let client = reqwest::Client::builder()
+        .user_agent("agent-aleph/0.1")
+        .timeout(std::time::Duration::from_secs(20))
+        .build()?;
+    let resp = client.get(&url).send().await?;
+    let raw: Vec<serde_json::Value> = resp.json().await?;
+    Ok(raw.into_iter().filter_map(parse_hf_model).collect())
+}
+
+/// Convierte un objeto JSON del Hub en `HfModel`.
+fn parse_hf_model(v: serde_json::Value) -> Option<HfModel> {
+    let id = v.get("id")?.as_str()?.to_string();
+    let (author, name) = match id.split_once('/') {
+        Some((a, n)) => (a.to_string(), n.to_string()),
+        None => ("".into(), id.clone()),
+    };
+    Some(HfModel {
+        repo: id,
+        author,
+        name,
+        downloads: v.get("downloads").and_then(|d| d.as_u64()).unwrap_or(0),
+        likes: v.get("likes").and_then(|d| d.as_u64()).unwrap_or(0),
+        tags: v
+            .get("tags")
+            .and_then(|t| t.as_array())
+            .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+            .unwrap_or_default(),
+    })
 }
 
 pub async fn list_model_files(repo: &str) -> AppResult<Vec<HfFile>> {

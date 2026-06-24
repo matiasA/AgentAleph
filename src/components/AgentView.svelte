@@ -8,7 +8,8 @@
     onAgentDone,
     onAgentPermission,
   } from "../lib/api";
-  import type { ChatMsg, ModelStatus, SessionMeta } from "../lib/types";
+  import type { AgentMsg, ModelStatus, SessionMeta } from "../lib/types";
+  import { buildContextBlock } from "../lib/agentContext.svelte";
   import Icon from "./Icon.svelte";
   import Select from "./Select.svelte";
 
@@ -92,11 +93,23 @@
       unlisten.push(
         await onAgentDone((e) => {
           if (e.session_id !== sid) return;
+          // Cerrar la burbuja del modelo en streaming; si quedó vacía, descartarla.
           if (modelIdx !== null && items[modelIdx]?.kind === "model") {
-            (items[modelIdx] as any).streaming = false;
+            const mb = items[modelIdx] as any;
+            mb.streaming = false;
+            if (!mb.text.trim() && !(mb.reasoning ?? "").trim()) {
+              items.splice(modelIdx, 1);
+              modelIdx = null;
+            }
           }
           if (e.reason === "done") {
-            items.push({ kind: "final", text: e.text });
+            // En la ruta nativa el texto final ya se transmitió a la burbuja: no duplicar.
+            const last = items[items.length - 1] as any;
+            if (last?.kind === "model" && (e.text ?? "").trim() && last.text.trim() === e.text.trim()) {
+              items[items.length - 1] = { kind: "final", text: e.text };
+            } else {
+              items.push({ kind: "final", text: e.text });
+            }
           } else if (e.reason === "max_steps" || e.reason === "loop") {
             items.push({ kind: "error", text: e.text });
           } else if (e.error && e.error !== "cancelled") {
@@ -150,7 +163,10 @@
     running = true;
     scrollToBottom();
     try {
-      await api.agentSend(sid, workingDir, mode, text);
+      // El contexto adjunto (panel derecho) se antepone al input que recibe el modelo;
+      // la burbuja del usuario muestra solo su texto.
+      const ctx = buildContextBlock();
+      await api.agentSend(sid, workingDir, mode, ctx ? `${ctx}\n${text}` : text);
     } catch (e: any) {
       running = false;
       items.push({ kind: "error", text: String(e) });
@@ -223,24 +239,46 @@
   }
 
   /** Reconstruye el timeline visible a partir de la conversación guardada. */
-  function reconstruct(messages: ChatMsg[]): Item[] {
+  function reconstruct(messages: AgentMsg[]): Item[] {
     const out: Item[] = [];
     let lastTool = "?";
     let lastArgs = "";
     for (const m of messages) {
+      // Notas y errores del harness (rol system con harness=true) y el system prompt: ocultos.
       if (m.role === "system") continue;
       if (m.role === "assistant") {
-        const p = tryParse(m.content);
-        if (p?.tool === "final") {
-          out.push({ kind: "final", text: p.args?.text ?? m.content });
+        // Ruta nativa: las llamadas vienen en tool_calls; el contenido puede ir vacío.
+        if (m.tool_calls && m.tool_calls.length) {
+          const c = m.tool_calls[0];
+          lastTool = c.name;
+          lastArgs = JSON.stringify(c.args ?? {});
+          if (m.content.trim()) {
+            out.push({ kind: "model", text: m.content, reasoning: "", streaming: false });
+          }
         } else {
-          out.push({ kind: "model", text: m.content, reasoning: "", streaming: false });
-          if (p?.tool) {
-            lastTool = p.tool;
-            lastArgs = JSON.stringify(p.args ?? {});
+          // Ruta GBNF: la llamada (o el "final") va como JSON en el contenido.
+          const p = tryParse(m.content);
+          if (p?.tool === "final") {
+            out.push({ kind: "final", text: p.args?.text ?? m.content });
+          } else {
+            out.push({ kind: "model", text: m.content, reasoning: "", streaming: false });
+            if (p?.tool) {
+              lastTool = p.tool;
+              lastArgs = JSON.stringify(p.args ?? {});
+            }
           }
         }
+      } else if (m.role === "tool") {
+        // Resultado de herramienta (modelo rico): el contenido es la salida cruda.
+        out.push({
+          kind: "tool",
+          tool: m.tool_name ?? lastTool,
+          args: lastArgs,
+          result: m.content,
+          isError: m.is_error ?? false,
+        });
       } else if (m.role === "user") {
+        // Compatibilidad con sesiones antiguas: resultados/notas reinyectados como user.
         if (m.content.startsWith("Resultado de ")) {
           const nl = m.content.indexOf("\n");
           const header = nl >= 0 ? m.content.slice(0, nl) : m.content;
@@ -257,7 +295,7 @@
           m.content.startsWith("Error: tu respuesta") ||
           m.content.startsWith("[…")
         ) {
-          // mensajes internos del harness: no se muestran
+          // mensajes internos del harness (sesiones antiguas): no se muestran
           continue;
         } else {
           out.push({ kind: "user", text: m.content });
