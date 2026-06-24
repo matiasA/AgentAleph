@@ -1,27 +1,131 @@
+/* ============================================================================
+   Agent Aleph — design tokens
+   Base oscura única + 6 "tonos" (acentos) seleccionables vía [data-accent].
+   Los tokens de acento se derivan de --accent con color-mix, así cada tema
+   sólo necesita declarar su color base.
+   ============================================================================ */
+
 :root {
-  --bg-0: #0a0a0a;
-  --bg-1: #0f0f0f;
-  --bg-2: #161616;
-  --bg-3: #1d1d1d;
-  --bg-hover: #232323;
-  --border: #262626;
-  --border-soft: #1f1f1f;
-  --text-0: #e8e8e8;
-  --text-1: #b4b4b4;
-  --text-2: #767676;
-  --text-3: #555;
-  --accent: #4a9eff;
-  --accent-dim: #2a5a8f;
-  --accent-bg: rgba(74, 158, 255, 0.1);
-  --success: #5cb85c;
-  --warn: #e0a030;
-  --error: #e05050;
+  /* — superficies — (base "Anysphere Dark" de Cursor: gris plano #181818
+     separado por bordes, no negro puro) */
+  --bg-0: #181818; /* lienzo principal / chat (editor.background) */
+  --bg-1: #181818; /* sidebar / paneles — plano como Anysphere */
+  --bg-2: #1f1f1f; /* tarjetas (ligeramente elevadas para que se lean) */
+  --bg-3: #242424; /* tarjetas elevadas / menús (dropdown.background) */
+  --bg-hover: #2a282a; /* list.hoverBackground */
+  --bg-active: #2f2f2f;
+  --bg-input: #212121; /* input.background */
+
+  --border: #2c2c2c;
+  --border-soft: #242424;
+  --border-strong: #383838; /* panel.border */
+
+  /* — texto — */
+  --text-0: #d6d6dd; /* foreground */
+  --text-1: #9b9ba6;
+  --text-2: #6d6d6d; /* comment / muted */
+  --text-3: #565656;
+
+  /* — acento (sobre-escrito por [data-accent]) — */
+  --accent: #228df2; /* azul Anysphere */
+  --accent-2: #359dff; /* button.hoverBackground */
+  --accent-contrast: #eaf2fc;
+
+  /* derivados del acento (compartidos por todos los tonos) */
+  --accent-bg: color-mix(in srgb, var(--accent) 13%, transparent);
+  --accent-bg-strong: color-mix(in srgb, var(--accent) 22%, transparent);
+  --accent-border: color-mix(in srgb, var(--accent) 38%, transparent);
+  --accent-dim: color-mix(in srgb, var(--accent) 50%, var(--bg-1));
+  --accent-glow: color-mix(in srgb, var(--accent) 55%, transparent);
+
+  /* — semánticos — (alineados a la sintaxis de Anysphere) */
+  --success: #a8cc7c; /* verde de strings */
+  --warn: #e3b341;
+  --error: #ef5f5f;
+  --success-bg: color-mix(in srgb, var(--success) 14%, transparent);
+  --warn-bg: color-mix(in srgb, var(--warn) 14%, transparent);
+  --error-bg: color-mix(in srgb, var(--error) 14%, transparent);
+
+  /* — tipografía — */
+  --sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: "JetBrains Mono", "SF Mono", "Cascadia Code", "Fira Code", Menlo,
     Consolas, "Liberation Mono", monospace;
-  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --radius: 4px;
-  --radius-lg: 6px;
+
+  /* — radios — */
+  --radius-sm: 6px;
+  --radius: 9px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  /* — sombras — */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 6px 22px rgba(0, 0, 0, 0.38);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.55);
+  --shadow-glow: 0 0 0 1px var(--accent-border), 0 8px 28px var(--accent-glow);
+
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --t-fast: 0.12s var(--ease);
+  --t: 0.2s var(--ease);
 }
+
+/* ---------- Tonos (acentos) — el azul es el de Anysphere; los demás son
+   variantes que armonizan con la base gris ---------- */
+[data-accent="blue"]    { --accent: #228df2; --accent-2: #359dff; --accent-contrast: #eaf2fc; }
+[data-accent="indigo"]  { --accent: #aaa0fa; --accent-2: #c2bbff; --accent-contrast: #0e0c1c; } /* lavanda Anysphere */
+[data-accent="emerald"] { --accent: #83d6c5; --accent-2: #a3e3d6; --accent-contrast: #04140f; } /* teal Anysphere */
+[data-accent="amber"]   { --accent: #e3b341; --accent-2: #f0c764; --accent-contrast: #1a1203; }
+[data-accent="rose"]    { --accent: #e394a5; --accent-2: #efb1bd; --accent-contrast: #1c0a0f; }
+[data-accent="green"]   { --accent: #a8cc7c; --accent-2: #bedd99; --accent-contrast: #0f1505; } /* verde strings */
+
+/* ---------- Modo claro ----------
+   Sobre-escribe sólo superficies/texto/sombras; el acento (--accent) se
+   conserva de [data-accent], pero --accent-2 se oscurece para que el texto de
+   énfasis tenga contraste sobre fondo claro. Va después de los tonos para
+   ganar en orden de cascada (misma especificidad). */
+[data-mode="light"] {
+  --bg-0: #ffffff; /* lienzo */
+  --bg-1: #f7f7f6; /* sidebar / paneles */
+  --bg-2: #ffffff; /* tarjetas */
+  --bg-3: #ffffff; /* menús / elevado */
+  --bg-hover: #efefed;
+  --bg-active: #e6e6e3;
+  --bg-input: #ffffff;
+
+  --border: #e4e4e1;
+  --border-soft: #ededea;
+  --border-strong: #d2d2ce;
+
+  --text-0: #1b1b1c;
+  --text-1: #45454a;
+  --text-2: #76767c;
+  --text-3: #a2a2a8;
+
+  /* énfasis legible sobre claro */
+  --accent-2: color-mix(in srgb, var(--accent) 78%, #16161a);
+  --accent-bg: color-mix(in srgb, var(--accent) 12%, transparent);
+  --accent-bg-strong: color-mix(in srgb, var(--accent) 20%, transparent);
+  --accent-border: color-mix(in srgb, var(--accent) 42%, transparent);
+  --accent-dim: color-mix(in srgb, var(--accent) 55%, #ffffff);
+
+  --success: #4f8a39;
+  --warn: #b07d18;
+  --error: #d23b3b;
+  --success-bg: color-mix(in srgb, var(--success) 16%, transparent);
+  --warn-bg: color-mix(in srgb, var(--warn) 16%, transparent);
+  --error-bg: color-mix(in srgb, var(--error) 12%, transparent);
+
+  --shadow-sm: 0 1px 2px rgba(20, 20, 30, 0.08);
+  --shadow: 0 6px 22px rgba(20, 20, 30, 0.1);
+  --shadow-lg: 0 16px 44px rgba(20, 20, 30, 0.16);
+}
+
+/* En claro, el verde/ámbar son muy claros: oscurecer su acento base para que
+   los rellenos sólidos y los iconos se distingan. */
+[data-mode="light"][data-accent="green"] { --accent: #6f9e3f; }
+[data-mode="light"][data-accent="amber"] { --accent: #c8902a; }
+[data-mode="light"][data-accent="emerald"] { --accent: #2f9e87; }
 
 * {
   box-sizing: border-box;
@@ -38,32 +142,42 @@ body,
 }
 
 body {
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: 13px;
   background: var(--bg-0);
   color: var(--text-0);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   user-select: none;
 }
 
+/* ===================== Botones ===================== */
 button {
   font-family: inherit;
   font-size: inherit;
+  font-weight: 500;
   background: transparent;
   color: var(--text-0);
   border: 1px solid var(--border);
-  padding: 6px 12px;
-  border-radius: var(--radius);
+  padding: 7px 13px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+  transition: background var(--t-fast), border-color var(--t-fast),
+    color var(--t-fast), box-shadow var(--t-fast), transform var(--t-fast);
 }
-
 button:hover:not(:disabled) {
   background: var(--bg-hover);
-  border-color: var(--text-3);
+  border-color: var(--border-strong);
 }
-
+button:active:not(:disabled) {
+  transform: translateY(0.5px);
+}
 button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -71,74 +185,97 @@ button:disabled {
 
 button.primary {
   background: var(--accent-bg);
-  border-color: var(--accent-dim);
-  color: var(--accent);
+  border-color: var(--accent-border);
+  color: var(--accent-2);
+}
+button.primary:hover:not(:disabled) {
+  background: var(--accent-bg-strong);
+  border-color: var(--accent);
 }
 
-button.primary:hover:not(:disabled) {
-  background: rgba(74, 158, 255, 0.18);
+button.solid {
+  background: var(--accent);
   border-color: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+}
+button.solid:hover:not(:disabled) {
+  background: var(--accent-2);
+  border-color: var(--accent-2);
 }
 
 button.danger:hover:not(:disabled) {
   border-color: var(--error);
   color: var(--error);
+  background: var(--error-bg);
 }
 
 button.ghost {
   border-color: transparent;
-  padding: 4px 8px;
+  padding: 5px 9px;
+  color: var(--text-1);
 }
-
 button.ghost:hover:not(:disabled) {
   background: var(--bg-hover);
   border-color: var(--border);
+  color: var(--text-0);
 }
 
+/* ===================== Inputs ===================== */
 input,
 textarea,
 select {
   font-family: inherit;
   font-size: inherit;
-  background: var(--bg-2);
+  background: var(--bg-input);
   color: var(--text-0);
   border: 1px solid var(--border);
-  padding: 6px 10px;
-  border-radius: var(--radius);
+  padding: 8px 11px;
+  border-radius: var(--radius-sm);
   outline: none;
   width: 100%;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
 }
-
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-3);
+}
 input:focus,
 textarea:focus,
 select:focus {
-  border-color: var(--accent-dim);
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 3px var(--accent-bg);
 }
-
 textarea {
   resize: none;
   user-select: text;
+  line-height: 1.55;
 }
 
+/* ===================== Scrollbar ===================== */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background: var(--bg-3);
-  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 9px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-3);
+  background: var(--border-strong);
+  background-clip: padding-box;
 }
 
+/* ===================== Layout ===================== */
 .app {
   display: grid;
-  grid-template-columns: 280px 1fr;
-  grid-template-rows: 1fr 24px;
+  grid-template-columns: 280px minmax(0, 1fr) 320px;
+  grid-template-rows: minmax(0, 1fr) 26px;
   height: 100vh;
   width: 100vw;
 }
@@ -158,6 +295,16 @@ textarea {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-width: 0;
+}
+
+.app__panel {
+  grid-row: 1;
+  background: var(--bg-1);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .app__statusbar {
@@ -167,77 +314,82 @@ textarea {
   border-top: 1px solid var(--border);
   display: flex;
   align-items: center;
-  padding: 0 10px;
+  padding: 0 14px;
   font-size: 11px;
   color: var(--text-2);
   gap: 14px;
 }
 
+/* ===================== Tags ===================== */
 .tag {
-  display: inline-block;
-  padding: 1px 6px;
-  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
   font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
   background: var(--bg-3);
   color: var(--text-1);
   border: 1px solid var(--border);
 }
-
 .tag.accent {
   background: var(--accent-bg);
-  color: var(--accent);
-  border-color: var(--accent-dim);
+  color: var(--accent-2);
+  border-color: var(--accent-border);
 }
-
 .tag.success {
   color: var(--success);
-  border-color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 45%, transparent);
+  background: var(--success-bg);
 }
-
 .tag.warn {
   color: var(--warn);
-  border-color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+  background: var(--warn-bg);
 }
-
 .tag.error {
   color: var(--error);
-  border-color: var(--error);
+  border-color: color-mix(in srgb, var(--error) 45%, transparent);
+  background: var(--error-bg);
 }
 
+/* ===================== Utilidades ===================== */
 .row {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-
 .row.between {
   justify-content: space-between;
 }
-
 .col {
   display: flex;
   flex-direction: column;
 }
-
 .muted {
   color: var(--text-2);
 }
-
 .dim {
   color: var(--text-3);
 }
-
 .small {
   font-size: 11px;
 }
+.mono {
+  font-family: var(--mono);
+}
 
 .kbd {
-  display: inline-block;
-  padding: 0 5px;
-  border: 1px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border: 1px solid var(--border-strong);
   border-bottom-width: 2px;
-  border-radius: 3px;
+  border-radius: 5px;
   font-size: 10px;
+  font-family: var(--mono);
   color: var(--text-1);
   background: var(--bg-2);
 }
@@ -253,15 +405,59 @@ textarea {
   margin: 4px 0;
 }
 
+.section-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--text-2);
+}
+
 .icon-btn {
   background: transparent;
-  border: none;
-  padding: 4px 6px;
+  border: 1px solid transparent;
+  padding: 6px;
   color: var(--text-2);
   cursor: pointer;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--t-fast), color var(--t-fast),
+    border-color var(--t-fast);
 }
 .icon-btn:hover {
   background: var(--bg-hover);
   color: var(--text-0);
+}
+
+/* iconos svg heredan el color del texto y un grosor consistente */
+svg.ico {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  flex: none;
+}
+svg.ico.sm {
+  width: 14px;
+  height: 14px;
+}
+svg.ico.lg {
+  width: 18px;
+  height: 18px;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }

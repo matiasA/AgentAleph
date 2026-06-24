@@ -5,7 +5,9 @@
   import Sidebar from "./components/Sidebar.svelte";
   import ChatView from "./components/ChatView.svelte";
   import AgentView from "./components/AgentView.svelte";
+  import AgentPanel from "./components/AgentPanel.svelte";
   import StatusBar from "./components/StatusBar.svelte";
+  import Icon from "./components/Icon.svelte";
 
   let mode = $state<"chat" | "agent">("chat");
 
@@ -90,8 +92,14 @@
 
   <main class="app__main">
     <div class="mode-switch">
-      <button class:active={mode === "chat"} onclick={() => (mode = "chat")}>Chat</button>
-      <button class:active={mode === "agent"} onclick={() => (mode = "agent")}>Agente</button>
+      <div class="mode-tabs">
+        <button class="mode-tab" class:active={mode === "chat"} onclick={() => (mode = "chat")}>
+          <Icon name="chat" size="sm" /> Chat
+        </button>
+        <button class="mode-tab" class:active={mode === "agent"} onclick={() => (mode = "agent")}>
+          <Icon name="agent" size="sm" /> Agente
+        </button>
+      </div>
     </div>
     {#if mode === "chat"}
       <ChatView {status} {sessionId} />
@@ -99,6 +107,10 @@
       <AgentView {status} sessionId={`agent-${sessionId}`} />
     {/if}
   </main>
+
+  <aside class="app__panel">
+    <AgentPanel {mode} />
+  </aside>
 
   <footer class="app__statusbar">
     <StatusBar {status} {info} {pendingDownloads} {loadProgress} />
@@ -108,26 +120,35 @@
 <style>
   .mode-switch {
     display: flex;
-    gap: 1px;
-    background: var(--border);
-    border-bottom: 1px solid var(--border);
-  }
-  .mode-switch button {
-    flex: 1;
+    justify-content: center;
     background: var(--bg-1);
+    border-bottom: 1px solid var(--border);
+    padding: 0 14px;
+  }
+  .mode-tabs {
+    display: flex;
+    gap: 4px;
+  }
+  .mode-tab {
+    background: transparent;
     border: none;
     border-radius: 0;
-    padding: 7px 6px;
-    font-size: 11px;
+    padding: 13px 22px;
+    font-size: 13px;
+    font-weight: 500;
     color: var(--text-2);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
   }
-  .mode-switch button:hover {
-    background: var(--bg-2);
+  .mode-tab:hover {
+    background: transparent;
     color: var(--text-0);
   }
-  .mode-switch button.active {
-    background: var(--bg-2);
+  .mode-tab.active {
+    color: var(--accent-2);
+    border-bottom-color: var(--accent);
+  }
+  .mode-tab.active :global(svg.ico) {
     color: var(--accent);
-    border-bottom: 2px solid var(--accent);
   }
 </style>

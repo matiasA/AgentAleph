@@ -2,6 +2,7 @@
   import { api, onChatToken, onChatDone } from "../lib/api";
   import type { ChatMsg, ModelStatus } from "../lib/types";
   import Message from "./Message.svelte";
+  import Icon from "./Icon.svelte";
 
   let {
     status,
@@ -114,29 +115,34 @@
 </script>
 
 <div class="col" style="flex:1;overflow:hidden">
-  <div class="chat-header row between">
-    <div class="row" style="gap:8px">
-      <span class="small muted">Chat</span>
-      {#if status.loaded}
-        <span class="tag accent">{status.model_name}</span>
-      {:else}
-        <span class="tag warn">sin modelo</span>
-      {/if}
+  {#if messages.length > 0}
+    <div class="chat-header row between">
+      <div class="row" style="gap:8px">
+        {#if status.loaded}
+          <span class="tag accent">{status.model_name}</span>
+        {:else}
+          <span class="tag warn">sin modelo</span>
+        {/if}
+      </div>
+      <button class="ghost small-btn" onclick={clearChat} disabled={sending}>
+        Limpiar
+      </button>
     </div>
-    <button class="ghost small-btn" onclick={clearChat} disabled={sending || messages.length === 0}>
-      Limpiar
-    </button>
-  </div>
+  {/if}
 
   <div class="chat-scroll" bind:this={scrollEl}>
     {#if messages.length === 0}
       <div class="empty">
-        <div class="dim" style="font-size:14px">Sin mensajes</div>
-        <div class="dim small" style="margin-top:6px">
+        <div class="empty-orb">
+          <span class="orb-halo"></span>
+          <span class="orb-core"><Icon name="chat" size="lg" /></span>
+        </div>
+        <div class="empty-title">Comienza una conversación</div>
+        <div class="empty-sub">
           {#if status.loaded}
-            Escribe abajo para chatear con <strong>{status.model_name}</strong>
+            Escribe tu primer mensaje para <strong>{status.model_name}</strong>.
           {:else}
-            Carga un modelo desde la pestaña <strong>Modelos</strong>.
+            Selecciona o carga un modelo y escribe tu primer mensaje.
           {/if}
         </div>
       </div>
@@ -147,32 +153,45 @@
     {/if}
   </div>
 
-  <div class="composer">
-    <textarea
-      placeholder={status.loaded ? "Escribe un mensaje... (Enter para enviar, Shift+Enter para salto)" : "Carga un modelo para empezar a chatear"}
-      bind:value={input}
-      onkeydown={onKeydown}
-      rows="2"
-      disabled={!status.loaded}
-    ></textarea>
-    <div class="row between" style="margin-top:6px">
-      <span class="dim small">↵ enviar · ⇧↵ salto de línea</span>
-      {#if sending}
-        <button class="danger" onclick={stop}>■ Detener</button>
-      {:else}
-        <button class="primary" onclick={send} disabled={!status.loaded || !input.trim()}>
-          Enviar
-        </button>
-      {/if}
+  <div class="composer-wrap">
+    <div class="composer" class:disabled={!status.loaded}>
+      <textarea
+        placeholder={status.loaded ? "Escribe tu mensaje…" : "Carga un modelo para empezar a chatear"}
+        bind:value={input}
+        onkeydown={onKeydown}
+        rows="1"
+        disabled={!status.loaded}
+      ></textarea>
+      <div class="composer-bar">
+        <div class="tools">
+          <button class="icon-btn" title="Adjuntar contexto"><Icon name="plus" size="sm" /></button>
+          <button class="icon-btn" title="Parámetros"><Icon name="sliders" size="sm" /></button>
+          <button class="icon-btn" title="Adjuntar archivo"><Icon name="paperclip" size="sm" /></button>
+        </div>
+        {#if sending}
+          <button class="send stop" onclick={stop} title="Detener"><Icon name="stop" size="sm" /></button>
+        {:else}
+          <button
+            class="send"
+            onclick={send}
+            disabled={!status.loaded || !input.trim()}
+            title="Enviar">
+            <Icon name="send" size="sm" />
+          </button>
+        {/if}
+      </div>
+    </div>
+    <div class="hint">
+      <span><span class="kbd">↵</span> Enter para enviar</span>
+      <span><span class="kbd">⇧ ↵</span> Enter para nueva línea</span>
     </div>
   </div>
 </div>
 
 <style>
   .chat-header {
-    padding: 8px 14px;
-    border-bottom: 1px solid var(--border);
-    background: var(--bg-1);
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--border-soft);
   }
   .chat-scroll {
     flex: 1;
@@ -188,13 +207,139 @@
     text-align: center;
     padding: 20px;
   }
+  .empty-orb {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 22px;
+  }
+  .orb-halo {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(
+      circle,
+      var(--accent-bg) 0%,
+      transparent 68%
+    );
+    -webkit-mask: radial-gradient(circle, transparent 38%, #000 39%);
+    mask: radial-gradient(circle, transparent 38%, #000 39%);
+    opacity: 0.9;
+  }
+  .orb-core {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    color: var(--accent-2);
+  }
+  .empty-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-0);
+  }
+  .empty-sub {
+    font-size: 13px;
+    color: var(--text-2);
+    margin-top: 7px;
+    max-width: 340px;
+  }
+  .empty-sub strong {
+    color: var(--text-1);
+    font-weight: 600;
+  }
+
+  .composer-wrap {
+    padding: 12px 18px 14px;
+  }
   .composer {
-    padding: 10px 14px;
-    border-top: 1px solid var(--border);
-    background: var(--bg-1);
+    background: var(--bg-2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    padding: 12px 14px 10px;
+    transition: border-color var(--t-fast), box-shadow var(--t-fast);
+  }
+  .composer:focus-within {
+    border-color: var(--accent-border);
+    box-shadow: 0 0 0 3px var(--accent-bg);
+  }
+  .composer.disabled {
+    opacity: 0.7;
+  }
+  .composer textarea {
+    background: transparent;
+    border: none;
+    padding: 0;
+    max-height: 200px;
+    min-height: 24px;
+    field-sizing: content;
+  }
+  .composer textarea:focus {
+    box-shadow: none;
+  }
+  .composer-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+  }
+  .tools {
+    display: flex;
+    gap: 2px;
+  }
+  .send {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid var(--accent-border);
+    background: var(--accent-bg);
+    color: var(--accent-2);
+    flex: none;
+  }
+  .send:hover:not(:disabled) {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-contrast);
+  }
+  .send:disabled {
+    color: var(--text-3);
+    border-color: var(--border);
+    background: transparent;
+  }
+  .send.stop {
+    border-color: color-mix(in srgb, var(--error) 50%, transparent);
+    background: var(--error-bg);
+    color: var(--error);
+  }
+  .send.stop:hover {
+    background: var(--error);
+    color: #fff;
+    border-color: var(--error);
+  }
+  .hint {
+    display: flex;
+    gap: 16px;
+    justify-content: flex-end;
+    margin-top: 9px;
+    font-size: 11px;
+    color: var(--text-3);
+  }
+  .hint span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
   }
   .small-btn {
-    padding: 3px 10px;
+    padding: 4px 11px;
     font-size: 11px;
   }
 </style>

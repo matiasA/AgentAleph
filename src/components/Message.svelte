@@ -18,60 +18,75 @@
 </script>
 
 <div class="msg" class:user={isUser} class:assistant={!isUser}>
-  <div class="role">
-    {isUser ? "you" : "assistant"}
-  </div>
+  <div class="role">{isUser ? "Tú" : "Assistant"}</div>
 
-  {#if reasoning}
-    <div class="reasoning">
-      <button class="reasoning-toggle" onclick={() => (showReasoning = !showReasoning)}>
-        <span class="reasoning-icon">{showReasoning ? "▼" : "▶"}</span>
-        <span class="reasoning-label">
-          {inReasoning ? "pensando..." : "pensamiento"}
-          {#if !inReasoning}
-            <span class="dim">({reasoning.length} chars)</span>
-          {/if}
-        </span>
-        {#if inReasoning}<span class="cursor">▋</span>{/if}
-      </button>
-      {#if showReasoning || inReasoning}
-        <div class="reasoning-body">{reasoning}</div>
-      {/if}
+  <div class="bubble">
+    {#if reasoning}
+      <div class="reasoning">
+        <button class="reasoning-toggle" onclick={() => (showReasoning = !showReasoning)}>
+          <span class="reasoning-icon" class:open={showReasoning}>▸</span>
+          <span class="reasoning-label">
+            {inReasoning ? "pensando…" : "razonamiento"}
+            {#if !inReasoning}
+              <span class="dim">· {reasoning.length} car.</span>
+            {/if}
+          </span>
+          {#if inReasoning}<span class="cursor">▋</span>{/if}
+        </button>
+        {#if showReasoning || inReasoning}
+          <div class="reasoning-body">{reasoning}</div>
+        {/if}
+      </div>
+    {/if}
+
+    <div class="body">
+      {content}
+      {#if streaming && !inReasoning}<span class="cursor">▋</span>{/if}
     </div>
-  {/if}
-
-  <div class="body">
-    {content}
-    {#if streaming && !inReasoning}<span class="cursor">▋</span>{/if}
   </div>
 </div>
 
 <style>
   .msg {
-    padding: 12px 14px;
-    border-bottom: 1px solid var(--border-soft);
+    padding: 14px 18px;
+    display: flex;
+    flex-direction: column;
+    animation: fade-in 0.18s var(--ease);
+  }
+  .msg.user {
+    align-items: flex-end;
   }
   .role {
     font-size: 10px;
+    font-weight: 600;
     color: var(--text-3);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 4px;
+    letter-spacing: 0.6px;
+    margin-bottom: 5px;
+  }
+  .bubble {
+    max-width: 82%;
+  }
+  .msg.assistant .bubble {
+    max-width: 100%;
+  }
+  .msg.user .bubble {
+    background: var(--accent-bg);
+    border: 1px solid var(--accent-border);
+    border-radius: var(--radius-lg);
+    padding: 10px 13px;
   }
   .body {
     color: var(--text-0);
-    line-height: 1.6;
+    line-height: 1.65;
     white-space: pre-wrap;
     word-wrap: break-word;
     user-select: text;
   }
-  .user {
-    background: var(--bg-1);
-  }
   .reasoning {
     margin-bottom: 8px;
-    border-left: 2px solid var(--border);
-    padding-left: 8px;
+    border-left: 2px solid var(--border-strong);
+    padding-left: 10px;
   }
   .reasoning-toggle {
     background: transparent;
@@ -82,28 +97,35 @@
     color: var(--text-2);
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 5px;
   }
   .reasoning-toggle:hover {
+    background: transparent;
     color: var(--text-1);
   }
   .reasoning-icon {
-    font-size: 8px;
+    font-size: 10px;
     color: var(--text-3);
+    transition: transform var(--t-fast);
+  }
+  .reasoning-icon.open {
+    transform: rotate(90deg);
   }
   .reasoning-label {
     color: var(--text-2);
   }
   .reasoning-body {
     color: var(--text-2);
+    font-family: var(--mono);
     font-size: 11px;
-    line-height: 1.5;
+    line-height: 1.55;
     white-space: pre-wrap;
     word-wrap: break-word;
-    margin-top: 4px;
-    padding: 6px 8px;
+    margin-top: 6px;
+    padding: 8px 10px;
     background: var(--bg-2);
-    border-radius: var(--radius);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-sm);
     user-select: text;
     max-height: 300px;
     overflow-y: auto;

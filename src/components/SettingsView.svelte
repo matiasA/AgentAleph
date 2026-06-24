@@ -1,6 +1,13 @@
 <script lang="ts">
   import { api } from "../lib/api";
   import type { Settings as S, GpuDevice } from "../lib/types";
+  import Select from "./Select.svelte";
+
+  const cacheOptions = [
+    { value: "f16", label: "f16 (máx. calidad)" },
+    { value: "q8_0", label: "q8_0 (~50% memoria)" },
+    { value: "q4_0", label: "q4_0 (~75% memoria)" },
+  ];
 
   let {
     onSaved,
@@ -11,6 +18,12 @@
   let savedAt = $state<number | null>(null);
   let gpus = $state<GpuDevice[]>([]);
   let loadingGpus = $state(true);
+
+  let deviceOptions = $derived([
+    { value: "auto", label: gpus.length ? "auto (recomendado)" : "auto (dejar que llama-server elija)" },
+    { value: "cpu", label: "cpu (solo CPU)" },
+    ...gpus.map((g) => ({ value: g.id, label: `${g.id}: ${g.name} (${g.free_mb} MB libres)` })),
+  ]);
 
   $effect(() => {
     api.getSettings().then((v) => (s = v));
@@ -99,18 +112,9 @@
         {#if loadingGpus}
           <div class="dim small">Detectando GPUs...</div>
         {:else if gpus.length === 0}
-          <select bind:value={s.device}>
-            <option value="auto">auto (dejar que llama-server elija)</option>
-            <option value="cpu">cpu (solo CPU)</option>
-          </select>
+          <Select bind:value={s.device} options={deviceOptions} />
         {:else}
-          <select bind:value={s.device}>
-            <option value="auto">auto (recomendado)</option>
-            <option value="cpu">cpu (solo CPU)</option>
-            {#each gpus as g (g.id)}
-              <option value={g.id}>{g.id}: {g.name} ({g.free_mb} MB libres)</option>
-            {/each}
-          </select>
+          <Select bind:value={s.device} options={deviceOptions} />
           <div class="dim small" style="margin-top:4px">
             {#each gpus as g (g.id)}
               <div>{g.name} — {g.total_mb} MB total, {g.free_mb} MB libres</div>
@@ -123,19 +127,11 @@
       <div class="grid">
         <div class="field">
           <label>Caché KV — clave <span class="dim">(menos RAM de contexto)</span></label>
-          <select bind:value={s.cache_type_k}>
-            <option value="f16">f16 (máx. calidad)</option>
-            <option value="q8_0">q8_0 (~50% memoria)</option>
-            <option value="q4_0">q4_0 (~75% memoria)</option>
-          </select>
+          <Select bind:value={s.cache_type_k} options={cacheOptions} />
         </div>
         <div class="field">
           <label>Caché KV — valor</label>
-          <select bind:value={s.cache_type_v}>
-            <option value="f16">f16 (máx. calidad)</option>
-            <option value="q8_0">q8_0 (~50% memoria)</option>
-            <option value="q4_0">q4_0 (~75% memoria)</option>
-          </select>
+          <Select bind:value={s.cache_type_v} options={cacheOptions} />
         </div>
         <div class="field">
           <label>Batch size <span class="dim">(prefill)</span></label>

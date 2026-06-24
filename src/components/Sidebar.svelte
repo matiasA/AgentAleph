@@ -1,10 +1,13 @@
 <script lang="ts">
-  import { api, onDownloadProgress, onModelStatus } from "../lib/api";
+  import { api } from "../lib/api";
   import type { DownloadState, LoadProgress, ModelStatus } from "../lib/types";
   import ModelBrowser from "./ModelBrowser.svelte";
   import LocalModels from "./LocalModels.svelte";
   import DownloadsList from "./DownloadsList.svelte";
   import SettingsView from "./SettingsView.svelte";
+  import Icon from "./Icon.svelte";
+  import ThemePicker from "./ThemePicker.svelte";
+  import Logo from "./Logo.svelte";
 
   let {
     status,
@@ -25,6 +28,17 @@
 
   let localRefreshKey = $state(0);
 
+  const nav: { id: Tab; label: string; icon: string }[] = [
+    { id: "models", label: "Modelos", icon: "box" },
+    { id: "catalog", label: "Catálogo", icon: "catalog" },
+    { id: "downloads", label: "Descargas", icon: "download" },
+    { id: "settings", label: "Ajustes", icon: "settings" },
+  ];
+
+  let pendingCount = $derived(
+    downloads.filter((d) => d.status === "Downloading" || d.status === "Pending").length
+  );
+
   async function handleDownload(repo: string, filename: string, _displayName: string) {
     try {
       await api.download(repo, filename);
@@ -43,26 +57,23 @@
 
 <div class="sidebar">
   <div class="brand">
-    <div class="brand-name">AGENT ALEPH</div>
-    <div class="brand-sub dim">agente · modelos locales</div>
+    <Logo size={40} />
+    <div class="brand-text">
+      <div class="brand-name">Agent Aleph</div>
+      <div class="brand-sub">agente · modelos locales</div>
+    </div>
   </div>
 
-  <nav class="tabs">
-    <button class="tab" class:active={tab === "models"} onclick={() => (tab = "models")}>
-      Modelos
-    </button>
-    <button class="tab" class:active={tab === "catalog"} onclick={() => (tab = "catalog")}>
-      Catálogo
-    </button>
-    <button class="tab" class:active={tab === "downloads"} onclick={() => (tab = "downloads")}>
-      Descargas
-      {#if downloads.filter((d) => d.status === "Downloading" || d.status === "Pending").length > 0}
-        <span class="dot"></span>
-      {/if}
-    </button>
-    <button class="tab" class:active={tab === "settings"} onclick={() => (tab = "settings")}>
-      Ajustes
-    </button>
+  <nav class="nav">
+    {#each nav as item (item.id)}
+      <button class="nav-item" class:active={tab === item.id} onclick={() => (tab = item.id)}>
+        <Icon name={item.icon} />
+        <span class="nav-label">{item.label}</span>
+        {#if item.id === "downloads" && pendingCount > 0}
+          <span class="badge">{pendingCount}</span>
+        {/if}
+      </button>
+    {/each}
   </nav>
 
   <div class="content">
@@ -76,6 +87,16 @@
       <SettingsView onSaved={onStatusChange} />
     {/if}
   </div>
+
+  <div class="foot">
+    <ThemePicker />
+    <button class="icon-btn" title="Refrescar" onclick={refreshLocal}>
+      <Icon name="refresh" size="sm" />
+    </button>
+    <button class="icon-btn" title="Vista de cuadrícula">
+      <Icon name="grid" size="sm" />
+    </button>
+  </div>
 </div>
 
 <style>
@@ -86,58 +107,92 @@
     overflow: hidden;
   }
   .brand {
-    padding: 12px 14px 10px;
-    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 16px 16px 14px;
   }
   .brand-name {
+    font-size: 15px;
     font-weight: 700;
-    letter-spacing: 1px;
+    letter-spacing: -0.2px;
     color: var(--text-0);
-    font-size: 13px;
   }
   .brand-sub {
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-  }
-  .tabs {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1px;
-    background: var(--border);
-    border-bottom: 1px solid var(--border);
-  }
-  .tab {
-    background: var(--bg-1);
-    border: none;
-    border-radius: 0;
-    padding: 8px 6px;
-    font-size: 11px;
+    font-size: 10.5px;
     color: var(--text-2);
-    position: relative;
   }
-  .tab:hover {
-    background: var(--bg-2);
+
+  .nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 10px 10px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    width: 100%;
+    justify-content: flex-start;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    padding: 9px 11px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-1);
+  }
+  .nav-item :global(svg.ico) {
+    color: var(--text-2);
+    transition: color var(--t-fast);
+  }
+  .nav-item:hover {
+    background: var(--bg-hover);
+    border-color: transparent;
     color: var(--text-0);
   }
-  .tab.active {
-    background: var(--bg-2);
+  .nav-item:hover :global(svg.ico) {
+    color: var(--text-1);
+  }
+  .nav-item.active {
+    background: var(--accent-bg);
+    color: var(--accent-2);
+  }
+  .nav-item.active :global(svg.ico) {
     color: var(--accent);
-    border-bottom: 2px solid var(--accent);
   }
-  .dot {
-    position: absolute;
-    top: 4px;
-    right: 4px;
-    width: 6px;
-    height: 6px;
+  .nav-label {
+    flex: 1;
+    text-align: left;
+  }
+  .badge {
+    font-size: 10px;
+    font-weight: 700;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: var(--radius-pill);
     background: var(--accent);
-    border-radius: 50%;
+    color: var(--accent-contrast);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
+
   .content {
     flex: 1;
     overflow: hidden;
     display: flex;
     flex-direction: column;
+  }
+
+  .foot {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--border-soft);
   }
 </style>

@@ -9,6 +9,8 @@
     onAgentPermission,
   } from "../lib/api";
   import type { ChatMsg, ModelStatus, SessionMeta } from "../lib/types";
+  import Icon from "./Icon.svelte";
+  import Select from "./Select.svelte";
 
   let {
     status,
@@ -37,6 +39,13 @@
   let pending = $state<Pending | null>(null);
   let scrollEl: HTMLDivElement | null = $state(null);
   let modelIdx = $state<number | null>(null);
+
+  let sessionOptions = $derived([
+    ...(sessions.find((s) => s.id === sid)
+      ? []
+      : [{ value: sid, label: "· sesión actual (sin guardar)" }]),
+    ...sessions.map((s) => ({ value: s.id, label: s.title })),
+  ]);
 
   let unlisten: Array<() => void> = [];
 
@@ -282,7 +291,8 @@
         <button class:active={mode === "plan"} disabled={running} onclick={() => (mode = "plan")}>plan</button>
       </div>
       <button class="ghost small-btn" onclick={pickDir} title={workingDir}>
-        {workingDir ? "📁 " + workingDir.split("/").pop() : "📁 Elegir carpeta"}
+        <Icon name="folder" size="sm" />
+        {workingDir ? workingDir.split("/").pop() : "Elegir carpeta"}
       </button>
       <button class="ghost small-btn" onclick={clearAll} disabled={running || items.length === 0}>
         Limpiar
@@ -292,19 +302,14 @@
 
   <div class="session-bar">
     <button class="ghost small-btn" onclick={newSession} disabled={running}>+ Nueva</button>
-    <select
-      class="session-select"
-      value={sid}
-      disabled={running}
-      onchange={(e) => openSession((e.currentTarget as HTMLSelectElement).value)}
-    >
-      {#if !sessions.find((s) => s.id === sid)}
-        <option value={sid}>· sesión actual (sin guardar)</option>
-      {/if}
-      {#each sessions as s (s.id)}
-        <option value={s.id}>{s.title}</option>
-      {/each}
-    </select>
+    <div class="session-select">
+      <Select
+        value={sid}
+        options={sessionOptions}
+        disabled={running}
+        onChange={(v) => openSession(v)}
+      />
+    </div>
     {#if sessions.find((s) => s.id === sid)}
       <button class="ghost small-btn danger" onclick={() => deleteSession(sid)} disabled={running} title="Eliminar sesión">
         ✕
@@ -315,10 +320,14 @@
   <div class="agent-scroll" bind:this={scrollEl}>
     {#if items.length === 0}
       <div class="empty">
-        <div class="dim" style="font-size:14px">Agente listo</div>
-        <div class="dim small" style="margin-top:6px">
-          Elige una carpeta de proyecto y pide una tarea. El agente usará herramientas
-          (read_file) paso a paso.
+        <div class="empty-orb">
+          <span class="orb-halo"></span>
+          <span class="orb-core"><Icon name="agent" size="lg" /></span>
+        </div>
+        <div class="empty-title">Agente listo</div>
+        <div class="empty-sub">
+          Elige una carpeta de proyecto y describe una tarea. El agente usará herramientas
+          paso a paso.
         </div>
       </div>
     {:else}
@@ -335,7 +344,7 @@
           </div>
         {:else if it.kind === "tool"}
           <div class="step tool" class:err={it.isError}>
-            <div class="label">🔧 {it.tool} <span class="dim">{it.args}</span></div>
+            <div class="label"><Icon name="terminal" size="sm" /> <strong>{it.tool}</strong> <span class="dim mono">{it.args}</span></div>
             <pre class="result">{it.result}</pre>
           </div>
         {:else if it.kind === "final"}
@@ -355,28 +364,32 @@
       </div>
       <div class="row" style="gap:8px">
         <button class="danger small-btn" onclick={() => respond(false)}>Rechazar</button>
-        <button class="primary small-btn" onclick={() => respond(true)}>Permitir</button>
+        <button class="solid small-btn" onclick={() => respond(true)}>Permitir</button>
       </div>
     </div>
   {/if}
 
-  <div class="composer">
-    <textarea
-      placeholder={status.loaded ? "Describe una tarea para el agente..." : "Carga un modelo para empezar"}
-      bind:value={input}
-      onkeydown={onKeydown}
-      rows="2"
-      disabled={!status.loaded}
-    ></textarea>
-    <div class="row between" style="margin-top:6px">
-      <span class="dim small">↵ enviar · ⇧↵ salto de línea</span>
-      {#if running}
-        <button class="danger" onclick={stop}>■ Detener</button>
-      {:else}
-        <button class="primary" onclick={send} disabled={!status.loaded || !input.trim()}>
-          Ejecutar
-        </button>
-      {/if}
+  <div class="composer-wrap">
+    <div class="composer" class:disabled={!status.loaded}>
+      <textarea
+        placeholder={status.loaded ? "Describe una tarea para el agente…" : "Carga un modelo para empezar"}
+        bind:value={input}
+        onkeydown={onKeydown}
+        rows="1"
+        disabled={!status.loaded}
+      ></textarea>
+      <div class="composer-bar">
+        <span class="hint-inline">
+          <span class="kbd">↵</span> ejecutar · <span class="kbd">⇧↵</span> nueva línea
+        </span>
+        {#if running}
+          <button class="send stop" onclick={stop} title="Detener"><Icon name="stop" size="sm" /></button>
+        {:else}
+          <button class="send" onclick={send} disabled={!status.loaded || !input.trim()} title="Ejecutar">
+            <Icon name="send" size="sm" />
+          </button>
+        {/if}
+      </div>
     </div>
   </div>
 </div>
@@ -398,8 +411,7 @@
   .session-select {
     flex: 1;
     min-width: 0;
-    font-size: 11px;
-    padding: 3px 6px;
+    font-size: 12px;
   }
   .agent-scroll {
     flex: 1;
@@ -418,6 +430,46 @@
     justify-content: center;
     text-align: center;
     padding: 20px;
+  }
+  .empty-orb {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 22px;
+  }
+  .orb-halo {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--accent-bg) 0%, transparent 68%);
+    -webkit-mask: radial-gradient(circle, transparent 38%, #000 39%);
+    mask: radial-gradient(circle, transparent 38%, #000 39%);
+  }
+  .orb-core {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    color: var(--accent-2);
+  }
+  .empty-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-0);
+  }
+  .empty-sub {
+    font-size: 13px;
+    color: var(--text-2);
+    margin-top: 7px;
+    max-width: 360px;
   }
   .bubble {
     padding: 8px 12px;
@@ -454,6 +506,9 @@
   .label {
     font-size: 11px;
     margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
   .json,
   .result {
@@ -488,7 +543,8 @@
   }
   .mode-pill button.active {
     background: var(--accent);
-    color: var(--bg-0);
+    color: var(--accent-contrast);
+    font-weight: 600;
   }
   .permission {
     display: flex;
@@ -512,13 +568,79 @@
     color: #d9a028;
     margin-right: 6px;
   }
+  .composer-wrap {
+    padding: 12px 14px 14px;
+  }
   .composer {
-    padding: 10px 14px;
-    border-top: 1px solid var(--border);
-    background: var(--bg-1);
+    background: var(--bg-2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    padding: 12px 14px 10px;
+    transition: border-color var(--t-fast), box-shadow var(--t-fast);
+  }
+  .composer:focus-within {
+    border-color: var(--accent-border);
+    box-shadow: 0 0 0 3px var(--accent-bg);
+  }
+  .composer.disabled {
+    opacity: 0.7;
+  }
+  .composer textarea {
+    background: transparent;
+    border: none;
+    padding: 0;
+    max-height: 200px;
+    min-height: 24px;
+    field-sizing: content;
+  }
+  .composer textarea:focus {
+    box-shadow: none;
+  }
+  .composer-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+  }
+  .hint-inline {
+    font-size: 11px;
+    color: var(--text-3);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .send {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid var(--accent-border);
+    background: var(--accent-bg);
+    color: var(--accent-2);
+    flex: none;
+  }
+  .send:hover:not(:disabled) {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-contrast);
+  }
+  .send:disabled {
+    color: var(--text-3);
+    border-color: var(--border);
+    background: transparent;
+  }
+  .send.stop {
+    border-color: color-mix(in srgb, var(--error) 50%, transparent);
+    background: var(--error-bg);
+    color: var(--error);
+  }
+  .send.stop:hover {
+    background: var(--error);
+    color: #fff;
+    border-color: var(--error);
   }
   .small-btn {
-    padding: 3px 10px;
+    padding: 4px 11px;
     font-size: 11px;
     max-width: 220px;
     overflow: hidden;
