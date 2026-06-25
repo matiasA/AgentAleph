@@ -1,16 +1,24 @@
 <script lang="ts">
   import type { CatalogModel } from "../lib/types";
+  import type { Fit } from "../lib/api";
   import ModelFamilyBadge from "./ModelFamilyBadge.svelte";
 
   let {
     model,
     onDownload,
+    fit = null,
   }: {
     model: CatalogModel;
     onDownload: (m: CatalogModel, file: string) => void;
+    fit?: Fit | null;
   } = $props();
 
   let downloading = $state(false);
+
+  // Marca de "español nativo" derivada de los tags (sin campo extra en el modelo).
+  const isSpanish = $derived(
+    model.tags.some((t) => ["es", "espanol", "español", "multilingue", "multilingüe"].includes(t.toLowerCase()))
+  );
 
   async function handleDownload() {
     downloading = true;
@@ -30,9 +38,15 @@
         <span class="name">{model.name}</span>
         <span class="tag">{model.params}</span>
         <span class="tag dim-tag">{model.size_gb} GB</span>
+        {#if isSpanish}<span class="tag" title="Buen soporte de español">🇪🇸 Español</span>{/if}
       </div>
       <div class="dim small">{model.author}/{model.repo.split("/")[1] ?? model.repo}</div>
     </div>
+    {#if fit && fit.level !== "unknown"}
+      <span class="fit fit-{fit.level}" title={fit.detail}>
+        <span class="dot"></span>{fit.label}
+      </span>
+    {/if}
   </div>
   <div class="desc muted small">{model.description}</div>
   {#if model.tags.length}
@@ -75,5 +89,35 @@
   }
   .dim-tag {
     color: var(--text-2);
+  }
+  .fit {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 999px;
+    white-space: nowrap;
+    align-self: flex-start;
+  }
+  .fit .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .fit-green {
+    color: #2ea043;
+    background: color-mix(in srgb, #2ea043 16%, transparent);
+  }
+  .fit-amber {
+    color: #d29922;
+    background: color-mix(in srgb, #d29922 16%, transparent);
+  }
+  .fit-red {
+    color: #f85149;
+    background: color-mix(in srgb, #f85149 16%, transparent);
   }
 </style>

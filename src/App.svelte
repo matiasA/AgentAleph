@@ -13,6 +13,47 @@
   let mode = $state<"chat" | "agent">("chat");
   let sidebarOpen = $state(true);
 
+  // Anchos redimensionables de los paneles laterales (px), persistidos.
+  let sidebarW = $state(280);
+  let panelW = $state(320);
+  let dragging = $state<null | "sidebar" | "panel">(null);
+  let dragStartX = 0;
+  let dragStartW = 0;
+
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+  try {
+    const saved = JSON.parse(localStorage.getItem("layout") ?? "{}");
+    if (typeof saved.sidebarW === "number") sidebarW = clamp(saved.sidebarW, 200, 480);
+    if (typeof saved.panelW === "number") panelW = clamp(saved.panelW, 220, 560);
+  } catch {}
+
+  function startDrag(which: "sidebar" | "panel", e: PointerEvent) {
+    dragging = which;
+    dragStartX = e.clientX;
+    dragStartW = which === "sidebar" ? sidebarW : panelW;
+    window.addEventListener("pointermove", onDrag);
+    window.addEventListener("pointerup", endDrag);
+    e.preventDefault();
+  }
+
+  function onDrag(e: PointerEvent) {
+    const dx = e.clientX - dragStartX;
+    if (dragging === "sidebar") {
+      sidebarW = clamp(dragStartW + dx, 200, 480);
+    } else if (dragging === "panel") {
+      // El panel está a la derecha: arrastrar hacia la izquierda lo agranda.
+      panelW = clamp(dragStartW - dx, 220, 560);
+    }
+  }
+
+  function endDrag() {
+    dragging = null;
+    window.removeEventListener("pointermove", onDrag);
+    window.removeEventListener("pointerup", endDrag);
+    localStorage.setItem("layout", JSON.stringify({ sidebarW, panelW }));
+  }
+
   let status = $state<ModelStatus>({
     loaded: false,
     model: null,
@@ -89,7 +130,12 @@
     onToggleSidebar={() => (sidebarOpen = !sidebarOpen)}
   />
 
-  <div class="app" class:sidebar-collapsed={!sidebarOpen}>
+  <div
+    class="app"
+    class:sidebar-collapsed={!sidebarOpen}
+    class:dragging={dragging !== null}
+    style="grid-template-columns: {sidebarOpen ? sidebarW : 0}px minmax(0, 1fr) {panelW}px"
+  >
   <aside class="app__sidebar">
     <Sidebar
       {status}
@@ -99,6 +145,27 @@
       onStatusChange={refreshStatus}
     />
   </aside>
+
+  {#if sidebarOpen}
+    <div
+      class="resizer"
+      class:active={dragging === "sidebar"}
+      style="left: {sidebarW}px"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Redimensionar barra lateral"
+      onpointerdown={(e) => startDrag("sidebar", e)}
+    ></div>
+  {/if}
+  <div
+    class="resizer"
+    class:active={dragging === "panel"}
+    style="right: {panelW}px"
+    role="separator"
+    aria-orientation="vertical"
+    aria-label="Redimensionar panel"
+    onpointerdown={(e) => startDrag("panel", e)}
+  ></div>
 
   <main class="app__main">
     <div class="mode-switch">
@@ -129,6 +196,43 @@
 </div>
 
 <style>
+  /* El grid base vive en app.css; aquí lo hacemos contenedor de las manijas. */
+  .app {
+    position: relative;
+  }
+  /* Sin animación de columnas mientras se arrastra (evita lag) y sin selección. */
+  .app.dragging {
+    transition: none;
+    user-select: none;
+    cursor: col-resize;
+  }
+  .resizer {
+    position: absolute;
+    top: 0;
+    bottom: 26px; /* deja libre la barra de estado */
+    width: 9px;
+    transform: translateX(-50%);
+    cursor: col-resize;
+    z-index: 6;
+    touch-action: none;
+  }
+  /* Línea visible solo al pasar/arrastrar, centrada en la manija. */
+  .resizer::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 2px;
+    transform: translateX(-50%);
+    background: transparent;
+    transition: background var(--t);
+  }
+  .resizer:hover::after,
+  .resizer.active::after {
+    background: var(--accent);
+  }
+
   .mode-switch {
     display: flex;
     justify-content: center;

@@ -14,12 +14,16 @@ import type {
   SessionMeta,
   Settings,
   Skill,
+  SystemMemory,
+  Topic,
   ContextFile,
   StoredSession,
 } from "./types";
 
 export const api = {
   listCatalog: () => invoke<CatalogModel[]>("list_catalog_models"),
+  listTopics: () => invoke<Topic[]>("list_topics"),
+  systemMemory: () => invoke<SystemMemory>("system_memory"),
   searchHf: (q: string) => invoke<HfModel[]>("search_hf", { query: q }),
   browseHf: (sort: string, limit: number) =>
     invoke<HfModel[]>("browse_hf", { sort, limit }),
@@ -158,6 +162,61 @@ export async function onModelLoading(
   cb: (p: LoadProgress) => void
 ): Promise<UnlistenFn> {
   return listen<LoadProgress>("model://loading", (e) => cb(e.payload));
+}
+
+/** Hardware detectado, normalizado para el cálculo de "te entra". */
+export interface Hardware {
+  hasGpu: boolean;
+  vramFreeMb: number;
+  ramFreeMb: number;
+}
+
+export type FitLevel = "green" | "amber" | "red" | "unknown";
+
+export interface Fit {
+  level: FitLevel;
+  /** Texto corto para el badge. */
+  label: string;
+  /** Detalle para el tooltip. */
+  detail: string;
+}
+
+/**
+ * Estima si un modelo "te entra", comparando memoria necesaria contra VRAM+RAM
+ * (decisión: contra todo, porque una máquina sin VRAM puede correr en RAM).
+ *  🟢 fluido · 🟡 lento (offload parcial / CPU) · 🔴 no entra.
+ */
+export function modelFit(sizeGb: number, contextSize: number, hw: Hardware | null): Fit {
+  if (!hw || (hw.vramFreeMb === 0 && hw.ramFreeMb === 0)) {
+    return { level: "unknown", label: "", detail: "" };
+  }
+  const overheadMb = 512 + (contextSize / 1024) * 128; // pesos + caché KV aprox.
+  const neededMb = sizeGb * 1024 + overheadMb;
+  const budgetMb = hw.vramFreeMb + hw.ramFreeMb;
+  // Una iGPU sin VRAM dedicada (ej. Intel UHD) no sirve para offload: trátala como CPU.
+  const usableGpu = hw.hasGpu && hw.vramFreeMb >= 1024;
+
+  if (usableGpu) {
+    if (neededMb <= hw.vramFreeMb * 0.92) {
+      return { level: "green", label: "Fluido en GPU", detail: "Entra completo en tu VRAM." };
+    }
+    if (neededMb <= budgetMb * 0.85) {
+      return {
+        level: "amber",
+        label: "Te irá lento",
+        detail: "No cabe entero en VRAM: parte irá a RAM/CPU (más lento pero usable).",
+      };
+    }
+    return { level: "red", label: "No te entra", detail: "Supera tu VRAM + RAM disponibles." };
+  }
+  // Sin GPU: corre en CPU desde RAM.
+  if (neededMb <= hw.ramFreeMb * 0.7) {
+    return { level: "green", label: "Va bien en CPU", detail: "Entra holgado en tu RAM." };
+  }
+  if (neededMb <= hw.ramFreeMb * 0.92) {
+    return { level: "amber", label: "Lento en CPU", detail: "Entra en RAM pero justo; irá lento." };
+  }
+  return { level: "red", label: "No te entra", detail: "Supera tu RAM disponible." };
 }
 
 export function humanSize(n: number): string {

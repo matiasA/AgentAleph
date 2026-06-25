@@ -31,6 +31,11 @@ pub async fn list_catalog_models() -> AppResult<Vec<models::CatalogModel>> {
 }
 
 #[tauri::command]
+pub async fn list_topics() -> AppResult<Vec<models::Topic>> {
+    Ok(models::list_topics())
+}
+
+#[tauri::command]
 pub async fn search_hf(query: String) -> AppResult<Vec<models::HfModel>> {
     models::search_hf(&query).await
 }
@@ -296,6 +301,11 @@ pub async fn get_app_info(
 #[tauri::command]
 pub async fn list_gpus() -> AppResult<Vec<inference::GpuDevice>> {
     inference::list_gpu_devices().await
+}
+
+#[tauri::command]
+pub async fn system_memory() -> AppResult<inference::SystemMemory> {
+    Ok(inference::read_system_memory())
 }
 
 // ---------- Skills ----------

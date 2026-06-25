@@ -1,5 +1,6 @@
 use crate::error::{AppError, AppResult};
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CatalogModel {
@@ -11,8 +12,49 @@ pub struct CatalogModel {
     pub params: String,
     pub default_file: String,
     pub size_gb: f64,
+    #[serde(default)]
     pub category: String,
+    #[serde(default)]
     pub tags: Vec<String>,
+}
+
+/// Tema/uso para navegar el Hub por intención (Código, Legal, Sin censura…).
+/// Cada tema dispara búsquedas curadas contra HF y, para temas de pool delgado,
+/// destaca primero generalistas fuertes del catálogo.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Topic {
+    pub id: String,
+    pub label: String,
+    #[serde(default)]
+    pub icon: String,
+    /// "rich" (pool grande: el chip busca directo en HF) | "niche" (pool delgado:
+    /// primero generalistas recomendados, luego especializados de HF).
+    pub tier: String,
+    #[serde(default)]
+    pub blurb: String,
+    /// Términos lanzados contra `/api/models?filter=gguf&search=`.
+    pub hf_queries: Vec<String>,
+    /// Filtro opcional de idioma del Hub (ej. "es"). Vacío = sin filtro.
+    #[serde(default)]
+    pub hf_lang: String,
+    /// ids de modelos del catálogo a destacar como "generalistas recomendados".
+    #[serde(default)]
+    pub recommended_model_ids: Vec<String>,
+    /// Aviso/caption bajo el tema (disclaimers, contenido adulto…).
+    #[serde(default)]
+    pub note: Option<String>,
+}
+
+/// Estructura del `catalog.json` (local para test; en el futuro, remoto cacheado).
+/// Cada lista, si viene vacía o el archivo falta, cae al equivalente embebido.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct CatalogFile {
+    #[serde(default)]
+    pub version: u32,
+    #[serde(default)]
+    pub models: Vec<CatalogModel>,
+    #[serde(default)]
+    pub topics: Vec<Topic>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -262,8 +304,110 @@ fn curated() -> Vec<CatalogModel> {
     ]
 }
 
+/// Temas embebidos (fallback cuando no hay `catalog.json`). Los términos de
+/// búsqueda están verificados contra el Hub; los nicho recomiendan generalistas.
+fn curated_topics() -> Vec<Topic> {
+    fn t(
+        id: &str,
+        icon: &str,
+        label: &str,
+        tier: &str,
+        blurb: &str,
+        queries: &[&str],
+        rec: &[&str],
+        note: Option<&str>,
+    ) -> Topic {
+        Topic {
+            id: id.into(),
+            label: label.into(),
+            icon: icon.into(),
+            tier: tier.into(),
+            blurb: blurb.into(),
+            hf_queries: queries.iter().map(|s| s.to_string()).collect(),
+            hf_lang: String::new(),
+            recommended_model_ids: rec.iter().map(|s| s.to_string()).collect(),
+            note: note.map(String::from),
+        }
+    }
+    vec![
+        // ---- Tier "rich": pool grande, el chip busca directo en HF ----
+        t("code", "💻", "Código", "rich", "Programar, depurar y explicar código",
+            &["coder", "code"], &["qwen3.5-9b"], None),
+        t("reasoning", "🧠", "Razonamiento", "rich", "Lógica, matemáticas y paso a paso",
+            &["reasoning", "thinking"], &["phi-4-mini-reasoning", "qwen3.5-9b"], None),
+        t("uncensored", "🔓", "Sin censura", "rich", "Sin filtros de seguridad (abliterated)",
+            &["abliterated", "uncensored"], &[],
+            Some("Modelos sin filtros de seguridad. Úsalos con criterio y responsabilidad.")),
+        t("agent", "🛠️", "Agente / Tools", "rich", "Llamada a herramientas y flujos agénticos",
+            &["hermes"], &["qwen3.5-9b"], None),
+        t("roleplay", "🎭", "Roleplay / Escritura", "rich", "Personajes, narrativa y escritura creativa",
+            &["roleplay", "rp"], &[],
+            Some("Puede incluir material adulto/NSFW entre los resultados.")),
+        // ---- Tier "niche": pool delgado, primero generalistas recomendados ----
+        t("legal", "⚖️", "Legal", "niche", "Derecho y documentos legales",
+            &["legal", "law"], &["qwen3.5-9b", "gemma-4-12b"],
+            Some("Pocos modelos legales en GGUF y casi siempre por país. Para español, un generalista fuerte suele rendir mejor.")),
+        t("medical", "🩺", "Médico", "niche", "Salud y dominio biomédico",
+            &["medical", "bio-medical"], &["qwen3.5-9b", "gemma-4-12b"],
+            Some("No es consejo médico. Pool reducido en GGUF; un generalista fuerte suele ir mejor.")),
+        t("finance", "💰", "Finanzas", "niche", "Contabilidad y finanzas",
+            &["finance"], &["qwen3.5-9b", "gemma-4-12b"],
+            Some("Muy pocos modelos financieros en GGUF; considera un generalista fuerte.")),
+    ]
+}
+
+/// Resuelve la ruta del `catalog.json` local. Prioriza el override editable del
+/// usuario en el dir de config (recarga en caliente para test) y luego el cwd
+/// (en dev, `cargo tauri dev` corre desde `src-tauri/`). Devuelve `None` si no
+/// hay archivo y se debe usar el catálogo embebido.
+fn catalog_json_path() -> Option<PathBuf> {
+    if let Some(cfg) = dirs::config_dir() {
+        let p = cfg.join("agent-aleph/catalog.json");
+        if p.exists() {
+            return Some(p);
+        }
+    }
+    let cwd = std::env::current_dir().ok()?.join("catalog.json");
+    if cwd.exists() {
+        return Some(cwd);
+    }
+    None
+}
+
+/// Lee y parsea el `catalog.json` local. Cualquier fallo (ausente/ inválido)
+/// devuelve un `CatalogFile` vacío, que hace caer a los embebidos.
+fn load_catalog_file() -> CatalogFile {
+    let Some(path) = catalog_json_path() else {
+        return CatalogFile::default();
+    };
+    match std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str::<CatalogFile>(&s).ok())
+    {
+        Some(f) => f,
+        None => {
+            tracing::warn!("catalog.json inválido o ilegible en {:?}; uso embebido", path);
+            CatalogFile::default()
+        }
+    }
+}
+
 pub fn list_catalog() -> Vec<CatalogModel> {
-    curated()
+    let f = load_catalog_file();
+    if f.models.is_empty() {
+        curated()
+    } else {
+        f.models
+    }
+}
+
+pub fn list_topics() -> Vec<Topic> {
+    let f = load_catalog_file();
+    if f.topics.is_empty() {
+        curated_topics()
+    } else {
+        f.topics
+    }
 }
 
 pub async fn search_hf(query: &str) -> AppResult<Vec<HfModel>> {

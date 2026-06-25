@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "models": [],
+  "topics": [
+    {
+      "id": "code",
+      "label": "Código",
+      "icon": "💻",
+      "tier": "rich",
+      "blurb": "Programar, depurar y explicar código",
+      "hf_queries": ["coder", "code"],
+      "recommended_model_ids": ["qwen3.5-9b"],
+      "note": null
+    },
+    {
+      "id": "reasoning",
+      "label": "Razonamiento",
+      "icon": "🧠",
+      "tier": "rich",
+      "blurb": "Lógica, matemáticas y paso a paso",
+      "hf_queries": ["reasoning", "thinking"],
+      "recommended_model_ids": ["phi-4-mini-reasoning", "qwen3.5-9b"],
+      "note": null
+    },
+    {
+      "id": "uncensored",
+      "label": "Sin censura",
+      "icon": "🔓",
+      "tier": "rich",
+      "blurb": "Sin filtros de seguridad (abliterated)",
+      "hf_queries": ["abliterated", "uncensored"],
+      "recommended_model_ids": [],
+      "note": "Modelos sin filtros de seguridad. Úsalos con criterio y responsabilidad."
+    },
+    {
+      "id": "agent",
+      "label": "Agente / Tools",
+      "icon": "🛠️",
+      "tier": "rich",
+      "blurb": "Llamada a herramientas y flujos agénticos",
+      "hf_queries": ["hermes"],
+      "recommended_model_ids": ["qwen3.5-9b"],
+      "note": null
+    },
+    {
+      "id": "roleplay",
+      "label": "Roleplay / Escritura",
+      "icon": "🎭",
+      "tier": "rich",
+      "blurb": "Personajes, narrativa y escritura creativa",
+      "hf_queries": ["roleplay", "rp"],
+      "recommended_model_ids": [],
+      "note": "Puede incluir material adulto/NSFW entre los resultados."
+    },
+    {
+      "id": "legal",
+      "label": "Legal",
+      "icon": "⚖️",
+      "tier": "niche",
+      "blurb": "Derecho y documentos legales",
+      "hf_queries": ["legal", "law"],
+      "recommended_model_ids": ["qwen3.5-9b", "gemma-4-12b"],
+      "note": "Pocos modelos legales en GGUF y casi siempre por país. Para español, un generalista fuerte suele rendir mejor."
+    },
+    {
+      "id": "medical",
+      "label": "Médico",
+      "icon": "🩺",
+      "tier": "niche",
+      "blurb": "Salud y dominio biomédico",
+      "hf_queries": ["medical", "bio-medical"],
+      "recommended_model_ids": ["qwen3.5-9b", "gemma-4-12b"],
+      "note": "No es consejo médico. Pool reducido en GGUF; un generalista fuerte suele ir mejor."
+    },
+    {
+      "id": "finance",
+      "label": "Finanzas",
+      "icon": "💰",
+      "tier": "niche",
+      "blurb": "Contabilidad y finanzas",
+      "hf_queries": ["finance"],
+      "recommended_model_ids": ["qwen3.5-9b", "gemma-4-12b"],
+      "note": "Muy pocos modelos financieros en GGUF; considera un generalista fuerte."
+    }
+  ]
+}

@@ -411,6 +411,39 @@ pub async fn list_gpu_devices() -> AppResult<Vec<GpuDevice>> {
     Ok(devices)
 }
 
+/// Memoria RAM del sistema (Linux, vía `/proc/meminfo`). `free_mb` usa
+/// `MemAvailable` (memoria realmente utilizable sin swap agresivo).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SystemMemory {
+    pub total_mb: u64,
+    pub free_mb: u64,
+}
+
+pub fn read_system_memory() -> SystemMemory {
+    let mut total_kb = 0u64;
+    let mut avail_kb = 0u64;
+    if let Ok(txt) = std::fs::read_to_string("/proc/meminfo") {
+        for line in txt.lines() {
+            if let Some(v) = line.strip_prefix("MemTotal:") {
+                total_kb = parse_meminfo_kb(v);
+            } else if let Some(v) = line.strip_prefix("MemAvailable:") {
+                avail_kb = parse_meminfo_kb(v);
+            }
+        }
+    }
+    SystemMemory {
+        total_mb: total_kb / 1024,
+        free_mb: avail_kb / 1024,
+    }
+}
+
+fn parse_meminfo_kb(s: &str) -> u64 {
+    s.split_whitespace()
+        .next()
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(0)
+}
+
 fn extract_mb(s: &str, marker: &str) -> u64 {
     // busca el primer "NNNN MiB" que venga seguido (o precedido por marker)
     let needle = if marker.is_empty() { "MiB" } else { "MiB free" };

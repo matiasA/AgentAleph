@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { api } from "../lib/api";
-  import type { CatalogModel, HfModel, HfFile } from "../lib/types";
+  import { api, modelFit, type Hardware, type Fit } from "../lib/api";
+  import type { CatalogModel, HfModel, HfFile, Topic } from "../lib/types";
   import ModelCard from "./ModelCard.svelte";
   import Select from "./Select.svelte";
 
@@ -30,6 +30,17 @@
   let browseLoaded = $state(false);
   let browseLimit = $state(40);
 
+  // Temas / navegación por intención
+  let topics = $state<Topic[]>([]);
+  let activeTopic = $state<Topic | null>(null);
+  let topicResults = $state<HfModel[]>([]);
+  let topicLoading = $state(false);
+
+  // Hardware detectado para el badge "te entra".
+  let hardware = $state<Hardware | null>(null);
+  let hwLabel = $state("");
+  let contextSize = $state(4096);
+
   const sortOptions = [
     { value: "downloads", label: "Más descargados" },
     { value: "likes", label: "Más gustados" },
@@ -38,11 +49,91 @@
   ];
 
   $effect(() => {
-    api.listCatalog().then((c) => {
+    Promise.all([
+      api.listCatalog(),
+      api.listTopics(),
+      api.listGpus().catch(() => []),
+      api.systemMemory().catch(() => ({ total_mb: 0, free_mb: 0 })),
+      api.getSettings().catch(() => null),
+    ]).then(([c, tp, gpus, mem, s]) => {
       catalog = c;
+      topics = tp;
       loading = false;
+      if (s) contextSize = s.context_size;
+      // Sumo la VRAM libre de TODAS las GPUs aprovechables (descarto iGPU con ~0,
+      // p. ej. Intel UHD). El presupuesto total para "te entra" es VRAM + RAM.
+      const usableGpus = gpus
+        .filter((g) => g.free_mb >= 1024)
+        .sort((a, b) => b.free_mb - a.free_mb);
+      const vramFreeMb = usableGpus.reduce((s, g) => s + g.free_mb, 0);
+      const hasGpu = vramFreeMb >= 1024;
+      hardware = { hasGpu, vramFreeMb, ramFreeMb: mem.free_mb };
+
+      const ramGb = (mem.free_mb / 1024).toFixed(0);
+      if (hasGpu) {
+        const vramGb = (vramFreeMb / 1024).toFixed(1);
+        const totalGb = ((vramFreeMb + mem.free_mb) / 1024).toFixed(0);
+        const gpuName = usableGpus.length > 1 ? `${usableGpus.length} GPUs` : usableGpus[0].name;
+        hwLabel = `${gpuName} · ${vramGb} GB VRAM + ${ramGb} GB RAM (${totalGb} GB útiles)`;
+      } else {
+        hwLabel = `CPU · ${ramGb} GB RAM libre`;
+      }
     });
   });
+
+  function fitFor(m: CatalogModel): Fit {
+    return modelFit(m.size_gb, contextSize, hardware);
+  }
+
+  let recommendedModels = $derived.by(() => {
+    if (!activeTopic) return [];
+    return activeTopic.recommended_model_ids
+      .map((id) => catalog.find((m) => m.id === id))
+      .filter((m): m is CatalogModel => !!m);
+  });
+
+  async function selectTopic(t: Topic) {
+    activeTopic = t;
+    query = "";
+    searched = false;
+    selectedHf = null;
+    topicLoading = true;
+    topicResults = [];
+    try {
+      const lists = await Promise.all(t.hf_queries.map((q) => api.searchHf(q)));
+      const seen = new Set<string>();
+      const merged: HfModel[] = [];
+      for (const list of lists) {
+        for (const m of list) {
+          if (!seen.has(m.repo)) {
+            seen.add(m.repo);
+            merged.push(m);
+          }
+        }
+      }
+      merged.sort((a, b) => b.downloads - a.downloads);
+      topicResults = merged.slice(0, 40);
+    } catch (e) {
+      topicResults = [];
+    } finally {
+      topicLoading = false;
+    }
+  }
+
+  function showCatalog() {
+    activeTopic = null;
+    query = "";
+    searched = false;
+    view = "catalog";
+  }
+
+  function showBrowse() {
+    activeTopic = null;
+    query = "";
+    searched = false;
+    view = "browse";
+    if (!browseLoaded) doBrowse();
+  }
 
   async function doBrowse(reset = true) {
     if (reset) browseLimit = 40;
@@ -62,11 +153,6 @@
     await doBrowse(false);
   }
 
-  function setView(v: "catalog" | "browse") {
-    view = v;
-    if (v === "browse" && !browseLoaded) doBrowse();
-  }
-
   function changeSort(v: string) {
     sort = v;
     doBrowse();
@@ -78,6 +164,7 @@
       searched = false;
       return;
     }
+    activeTopic = null;
     searching = true;
     searched = true;
     try {
@@ -200,13 +287,38 @@
       </button>
     </div>
 
-    <div class="segmented">
-      <button class:active={view === "catalog"} onclick={() => setView("catalog")}>
-        Catálogo
+    {#if hwLabel}
+      <div class="hwbar" title="Estimamos qué modelos te entran según tu memoria libre">
+        <span>🖥️</span><span class="small">Tu equipo: {hwLabel}</span>
+      </div>
+    {/if}
+
+    <div class="chips">
+      <button
+        class="chip"
+        class:active={!activeTopic && !searched && view === "catalog"}
+        onclick={showCatalog}
+      >
+        📦 Catálogo
       </button>
-      <button class:active={view === "browse"} onclick={() => setView("browse")}>
-        Explorar HF
+      <button
+        class="chip"
+        class:active={!activeTopic && !searched && view === "browse"}
+        onclick={showBrowse}
+      >
+        🧭 Explorar HF
       </button>
+      <span class="chip-sep"></span>
+      {#each topics as t (t.id)}
+        <button
+          class="chip"
+          class:active={activeTopic?.id === t.id}
+          onclick={() => selectTopic(t)}
+          title={t.blurb}
+        >
+          {t.icon} {t.label}
+        </button>
+      {/each}
     </div>
 
     {#if searched}
@@ -218,42 +330,72 @@
           {@render hfRow(m)}
         {/each}
       </div>
-    {:else if view === "catalog"}
-      {#if loading}
-        <div class="muted small" style="padding:10px">Cargando catálogo…</div>
-      {:else}
-        <div class="scroll" style="padding:8px 10px">
-          {#each groupedCatalog as group (group.category)}
-            <div class="section-label">{group.category}</div>
-            {#each group.models as m (m.id)}
-              <ModelCard model={m} onDownload={downloadFromCatalog} />
-            {/each}
-          {/each}
-        </div>
-      {/if}
-    {:else}
-      <div class="browse-bar">
-        <span class="small muted">Todos los GGUF del Hub</span>
-        <div class="sort-wrap">
-          <Select value={sort} options={sortOptions} onChange={changeSort} />
-        </div>
-      </div>
+    {:else if activeTopic}
       <div class="scroll" style="padding:8px 10px">
-        {#if browsing && browseResults.length === 0}
-          <div class="muted small" style="padding:10px">Cargando modelos…</div>
-        {:else if browseResults.length === 0}
-          <div class="muted small" style="padding:10px">Sin resultados.</div>
+        {#if activeTopic.note}
+          <div class="topic-note">{activeTopic.note}</div>
+        {/if}
+        {#if topicLoading}
+          <div class="muted small" style="padding:6px 0">
+            Buscando “{activeTopic.label}” en HuggingFace…
+          </div>
         {:else}
-          {#each browseResults as m (m.repo)}
-            {@render hfRow(m)}
-          {/each}
-          {#if browseResults.length >= browseLimit}
-            <button class="ghost loadmore" onclick={loadMore} disabled={browsing}>
-              {browsing ? "Cargando…" : "Cargar más"}
-            </button>
+          {#if recommendedModels.length}
+            <div class="section-label">Generalistas recomendados</div>
+            {#each recommendedModels as m (m.id)}
+              <ModelCard model={m} fit={fitFor(m)} onDownload={downloadFromCatalog} />
+            {/each}
+          {/if}
+          <div class="section-label">
+            {recommendedModels.length ? "Especializados (HuggingFace)" : "Resultados en HuggingFace"}
+          </div>
+          {#if topicResults.length === 0}
+            <div class="muted small">Sin resultados especializados para este tema.</div>
+          {:else}
+            {#each topicResults as m (m.repo)}
+              {@render hfRow(m)}
+            {/each}
           {/if}
         {/if}
       </div>
+    {:else}
+      {#if view === "catalog"}
+        {#if loading}
+          <div class="muted small" style="padding:10px">Cargando catálogo…</div>
+        {:else}
+          <div class="scroll" style="padding:8px 10px">
+            {#each groupedCatalog as group (group.category)}
+              <div class="section-label">{group.category}</div>
+              {#each group.models as m (m.id)}
+                <ModelCard model={m} fit={fitFor(m)} onDownload={downloadFromCatalog} />
+              {/each}
+            {/each}
+          </div>
+        {/if}
+      {:else}
+        <div class="browse-bar">
+          <span class="small muted">Todos los GGUF del Hub</span>
+          <div class="sort-wrap">
+            <Select value={sort} options={sortOptions} onChange={changeSort} />
+          </div>
+        </div>
+        <div class="scroll" style="padding:8px 10px">
+          {#if browsing && browseResults.length === 0}
+            <div class="muted small" style="padding:10px">Cargando modelos…</div>
+          {:else if browseResults.length === 0}
+            <div class="muted small" style="padding:10px">Sin resultados.</div>
+          {:else}
+            {#each browseResults as m (m.repo)}
+              {@render hfRow(m)}
+            {/each}
+            {#if browseResults.length >= browseLimit}
+              <button class="ghost loadmore" onclick={loadMore} disabled={browsing}>
+                {browsing ? "Cargando…" : "Cargar más"}
+              </button>
+            {/if}
+          {/if}
+        </div>
+      {/if}
     {/if}
   </div>
 {/if}
@@ -264,31 +406,70 @@
     gap: 6px;
     padding: 8px 10px;
   }
-  .segmented {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 3px;
-    margin: 0 10px 6px;
-    padding: 3px;
+  .hwbar {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    margin: 2px 10px 8px;
+    padding: 7px 10px;
     background: var(--bg-2);
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-soft);
     border-radius: var(--radius-sm);
+    color: var(--text-2);
+    line-height: 1.45;
   }
-  .segmented button {
-    border: none;
-    background: transparent;
-    border-radius: 6px;
-    padding: 6px 8px;
+  .hwbar > span:last-child {
+    flex: 1;
+    min-width: 0;
+  }
+  .chips {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    overflow-x: auto;
+    padding: 0 10px 10px;
+    scrollbar-width: thin;
+  }
+  .chip-sep {
+    flex: none;
+    width: 1px;
+    align-self: stretch;
+    margin: 2px 2px;
+    background: var(--border);
+  }
+  .chips::-webkit-scrollbar {
+    height: 5px;
+  }
+  .chip {
+    flex: none;
+    border: 1px solid var(--border);
+    background: var(--bg-2);
+    border-radius: 999px;
+    padding: 5px 11px;
     font-size: 12px;
     color: var(--text-1);
+    white-space: nowrap;
+    cursor: pointer;
   }
-  .segmented button:hover {
+  .chip:hover {
     background: var(--bg-hover);
+    border-color: var(--text-3);
   }
-  .segmented button.active {
+  .chip.active {
     background: var(--accent);
     color: var(--accent-contrast);
+    border-color: var(--accent);
     font-weight: 600;
+  }
+  .topic-note {
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--text-2);
+    background: color-mix(in srgb, #d29922 12%, transparent);
+    border: 1px solid color-mix(in srgb, #d29922 35%, transparent);
+    border-radius: var(--radius-sm);
+    padding: 6px 9px;
+    margin-bottom: 8px;
   }
   .browse-bar {
     display: flex;

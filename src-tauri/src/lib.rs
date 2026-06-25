@@ -30,6 +30,7 @@ pub fn run() {
         .manage(Arc::new(app_state))
         .invoke_handler(tauri::generate_handler![
             commands::list_catalog_models,
+            commands::list_topics,
             commands::search_hf,
             commands::browse_hf,
             commands::list_model_files,
@@ -55,6 +56,7 @@ pub fn run() {
             commands::save_settings,
             commands::get_app_info,
             commands::list_gpus,
+            commands::system_memory,
             commands::list_skills,
             commands::set_skill_enabled,
             commands::create_skill,

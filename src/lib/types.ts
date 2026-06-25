@@ -20,6 +20,25 @@ export interface HfModel {
   tags: string[];
 }
 
+/** Tema/uso para navegar el Hub por intención (espejo de Rust `catalog::Topic`). */
+export interface Topic {
+  id: string;
+  label: string;
+  icon: string;
+  /** "rich" = el chip busca directo en HF; "niche" = primero generalistas. */
+  tier: "rich" | "niche";
+  blurb: string;
+  hf_queries: string[];
+  hf_lang: string;
+  recommended_model_ids: string[];
+  note: string | null;
+}
+
+export interface SystemMemory {
+  total_mb: number;
+  free_mb: number;
+}
+
 export interface HfFile {
   ref: string;
   path: string;
