@@ -1,24 +1,31 @@
 <script lang="ts">
-  // Iconos line-style (24x24, stroke). El color/grosor vienen de `svg.ico` en app.css.
+  import imgChat from "../assets/icon-chat.png";
+  import imgDownload from "../assets/icon-download.png";
+  import imgSettings from "../assets/icon-settings.png";
+
   let {
     name,
     size = "",
   }: {
     name: string;
-    size?: "" | "sm" | "lg";
+    size?: "" | "sm" | "lg" | "xl" | "xxl";
   } = $props();
 
-  // Cada entrada es el contenido interno del <svg viewBox="0 0 24 24">.
+  // Íconos PNG personalizados (blanco sobre transparente; modo claro invierte con CSS)
+  const pngIcons: Record<string, string> = {
+    chat: imgChat,
+    download: imgDownload,
+    settings: imgSettings,
+  };
+
+  // Íconos SVG line-style (24x24, stroke). El color/grosor vienen de `svg.ico` en app.css.
   const paths: Record<string, string> = {
     box: `<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5"/><path d="M12 13v8"/>`,
     catalog: `<rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/>`,
-    download: `<path d="M12 3v12"/><path d="m7 11 5 5 5-5"/><path d="M5 21h14"/>`,
-    settings: `<path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 13.5a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.1a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-2.9-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.1-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 2.9 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.9H21a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.5 1Z"/>`,
     folder: `<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`,
     "folder-plus": `<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v5M9.5 13.5h5"/>`,
     refresh: `<path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>`,
     grid: `<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>`,
-    chat: `<path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z"/>`,
     agent: `<rect x="4" y="7" width="16" height="12" rx="3"/><path d="M9 2v3M15 2v3M2 12h2M20 12h2"/><circle cx="9" cy="13" r="1.2"/><circle cx="15" cy="13" r="1.2"/>`,
     send: `<path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/>`,
     plus: `<path d="M12 5v14M5 12h14"/>`,
@@ -43,13 +50,55 @@
     alert: `<path d="M12 3 2 20h20z"/><path d="M12 10v4"/><path d="M12 17h0"/>`,
   };
 
+  const pngSrc = $derived(pngIcons[name]);
   const inner = $derived(paths[name] ?? "");
 </script>
 
-<svg
-  class="ico {size}"
-  viewBox="0 0 24 24"
-  aria-hidden="true"
-  xmlns="http://www.w3.org/2000/svg">
-  {@html inner}
-</svg>
+{#if pngSrc}
+  <img
+    src={pngSrc}
+    class="ico-png {size}"
+    aria-hidden="true"
+    alt=""
+    draggable="false"
+  />
+{:else}
+  <svg
+    class="ico {size}"
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+    xmlns="http://www.w3.org/2000/svg">
+    {@html inner}
+  </svg>
+{/if}
+
+<style>
+  .ico-png {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+    display: inline-block;
+    flex: none;
+    filter: none;
+  }
+  .ico-png.sm {
+    width: 16px;
+    height: 16px;
+  }
+  .ico-png.lg {
+    width: 28px;
+    height: 28px;
+  }
+  .ico-png.xl {
+    width: 44px;
+    height: 44px;
+  }
+  .ico-png.xxl {
+    width: 80px;
+    height: 80px;
+  }
+
+  :global([data-mode="light"]) .ico-png {
+    filter: invert(1) brightness(0.15);
+  }
+</style>

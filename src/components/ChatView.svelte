@@ -135,7 +135,7 @@
       <div class="empty">
         <div class="empty-orb">
           <span class="orb-halo"></span>
-          <span class="orb-core"><Icon name="chat" size="lg" /></span>
+          <Icon name="chat" size="xxl" />
         </div>
         <div class="empty-title">Comienza una conversación</div>
         <div class="empty-sub">
@@ -209,8 +209,8 @@
   }
   .empty-orb {
     position: relative;
-    width: 120px;
-    height: 120px;
+    width: 140px;
+    height: 140px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -220,26 +220,7 @@
     position: absolute;
     inset: 0;
     border-radius: 50%;
-    background: radial-gradient(
-      circle,
-      var(--accent-bg) 0%,
-      transparent 68%
-    );
-    -webkit-mask: radial-gradient(circle, transparent 38%, #000 39%);
-    mask: radial-gradient(circle, transparent 38%, #000 39%);
-    opacity: 0.9;
-  }
-  .orb-core {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 64px;
-    height: 64px;
-    border-radius: 50%;
-    background: var(--bg-2);
-    border: 1px solid var(--border);
-    color: var(--accent-2);
+    background: radial-gradient(circle, color-mix(in srgb, var(--accent) 12%, transparent) 0%, transparent 70%);
   }
   .empty-title {
     font-size: 18px;

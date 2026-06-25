@@ -127,6 +127,7 @@
     {status}
     {loadProgress}
     {pendingDownloads}
+    {downloads}
     onToggleSidebar={() => (sidebarOpen = !sidebarOpen)}
   />
 

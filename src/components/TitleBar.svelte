@@ -6,19 +6,25 @@
   import { onMount } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import Icon from "./Icon.svelte";
-  import type { LoadProgress, ModelStatus } from "../lib/types";
+  import Logo from "./Logo.svelte";
+  import DownloadsDropdown from "./DownloadsDropdown.svelte";
+  import type { DownloadState, LoadProgress, ModelStatus } from "../lib/types";
 
   let {
     status,
     loadProgress,
     pendingDownloads,
+    downloads = [],
     onToggleSidebar,
   }: {
     status: ModelStatus;
     loadProgress: LoadProgress | null;
     pendingDownloads: number;
+    downloads?: DownloadState[];
     onToggleSidebar: () => void;
   } = $props();
+
+  let downloadsOpen = $state(false);
 
   const win = getCurrentWindow();
   let maximized = $state(false);
@@ -64,6 +70,23 @@
     </div>
   {/if}
 
+  <!-- Botón de descargas con badge -->
+  <div class="zone">
+    <button
+      class="dl-btn"
+      class:active={downloadsOpen}
+      class:pulsing={pendingDownloads > 0}
+      title="Descargas"
+      aria-label="Abrir panel de descargas"
+      onclick={() => (downloadsOpen = !downloadsOpen)}
+    >
+      <Logo size={24} />
+      {#if pendingDownloads > 0}
+        <span class="dl-badge">{pendingDownloads}</span>
+      {/if}
+    </button>
+  </div>
+
   <!-- Extremo derecho — controles de ventana -->
   <div class="zone controls">
     <button class="winctl" title="Minimizar" aria-label="Minimizar" onclick={() => win.minimize()}>
@@ -88,6 +111,10 @@
     </button>
   </div>
 </header>
+
+{#if downloadsOpen}
+  <DownloadsDropdown {downloads} onClose={() => (downloadsOpen = false)} />
+{/if}
 
 <style>
   .titlebar {
@@ -142,6 +169,55 @@
     background: var(--bg-hover);
     border-color: transparent;
     color: var(--icon-active);
+  }
+
+  /* — botón de descargas — */
+  .dl-btn {
+    position: relative;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    padding: 3px;
+    display: inline-flex;
+    cursor: pointer;
+    transition: background var(--t-fast);
+  }
+  .dl-btn:hover {
+    background: var(--bg-hover);
+  }
+  .dl-btn.active {
+    background: var(--accent-bg);
+  }
+  .dl-badge {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
+    border-radius: var(--radius-pill);
+    background: var(--accent);
+    color: var(--accent-contrast);
+    font-size: 9px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  @keyframes pulse-badge {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+  .dl-btn.pulsing .dl-badge {
+    animation: pulse-badge 1.5s ease-in-out infinite;
+  }
+  @keyframes logo-glow-pulse {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.35) drop-shadow(0 0 6px var(--accent-glow, #3dcfcf88)); }
+  }
+  .dl-btn.pulsing :global(.logo) {
+    animation: logo-glow-pulse 1.5s ease-in-out infinite;
   }
 
   /* — estado efímero — */
