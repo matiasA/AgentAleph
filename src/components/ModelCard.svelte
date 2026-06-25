@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { CatalogModel } from "../lib/types";
+  import ModelFamilyBadge from "./ModelFamilyBadge.svelte";
 
   let {
     model,
@@ -23,6 +24,7 @@
 
 <div class="model-card">
   <div class="row between" style="margin-bottom:6px">
+    <ModelFamilyBadge name={`${model.name} ${model.tags.join(" ")}`} />
     <div class="col" style="flex:1;min-width:0">
       <div class="row" style="gap:6px;flex-wrap:wrap">
         <span class="name">{model.name}</span>

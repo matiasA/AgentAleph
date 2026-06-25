@@ -15,7 +15,7 @@ use tauri::{AppHandle, Emitter};
 use tokio_util::sync::CancellationToken;
 
 /// Tope duro de pasos por turno para evitar bucles infinitos en modelos débiles.
-const MAX_STEPS: usize = 25;
+pub const MAX_STEPS: usize = 25;
 
 /// Mensaje final cuando se aborta por bucle (misma llamada repetida demasiadas veces).
 const LOOP_MSG: &str = "Me quedé repitiendo la misma acción sin avanzar. Detengo la tarea; \
@@ -29,7 +29,7 @@ enum CallFlow {
     Loop,
 }
 
-// ---------- Eventos hacia el frontend ----------
+// ---------- Eventos hacia el frontend (formato de cable) ----------
 
 #[derive(Clone, Serialize)]
 pub struct AgentTokenEvent {
@@ -59,7 +59,7 @@ pub struct AgentToolEvent {
 pub struct AgentDoneEvent {
     pub session_id: String,
     pub text: String,
-    pub reason: String, // "done" | "max_steps" | "cancelled" | "error"
+    pub reason: String, // "done" | "max_steps" | "cancelled" | "error" | "loop"
     pub error: Option<String>,
 }
 
@@ -70,6 +70,115 @@ pub struct AgentPermissionEvent {
     pub tool: String,
     pub args: String,
     pub summary: String,
+}
+
+// ---------- Sink de eventos: abstrae el destino de los eventos del loop ----------
+//
+// El cuerpo del loop de agente vive desacoplado de `tauri::AppHandle`: emite a un
+// `LoopSink`. La ruta Tauri usa `TauriSink` (reemite eventos a la webview); un
+// harness headless (tests/eval) puede usar un sink que solo registra o imprime,
+// sin necesidad de una app de Tauri corriendo. Así probamos el mismo código del
+// harness que ejecuta la app real.
+pub trait LoopSink: Send + Sync {
+    fn emit_step(&self, session_id: &str, step: usize, phase: &str);
+    fn emit_token(&self, session_id: &str, token: &str, is_reasoning: bool);
+    fn emit_tool(
+        &self,
+        session_id: &str,
+        step: usize,
+        tool: &str,
+        args: &str,
+        result: &str,
+        is_error: bool,
+    );
+    fn emit_permission(
+        &self,
+        session_id: &str,
+        request_id: &str,
+        tool: &str,
+        args: &str,
+        summary: &str,
+    );
+    fn emit_done(&self, session_id: &str, text: &str, reason: &str, error: Option<&str>);
+}
+
+/// `LoopSink` que reemite los eventos al frontend vía `app.emit` (ruta Tauri real).
+struct TauriSink {
+    app: AppHandle,
+}
+
+impl LoopSink for TauriSink {
+    fn emit_step(&self, session_id: &str, step: usize, phase: &str) {
+        let _ = self.app.emit(
+            "agent://step",
+            AgentStepEvent {
+                session_id: session_id.to_string(),
+                step,
+                phase: phase.to_string(),
+            },
+        );
+    }
+    fn emit_token(&self, session_id: &str, token: &str, is_reasoning: bool) {
+        let _ = self.app.emit(
+            "agent://token",
+            AgentTokenEvent {
+                session_id: session_id.to_string(),
+                token: token.to_string(),
+                is_reasoning,
+            },
+        );
+    }
+    fn emit_tool(
+        &self,
+        session_id: &str,
+        step: usize,
+        tool: &str,
+        args: &str,
+        result: &str,
+        is_error: bool,
+    ) {
+        let _ = self.app.emit(
+            "agent://tool",
+            AgentToolEvent {
+                session_id: session_id.to_string(),
+                step,
+                tool: tool.to_string(),
+                args: args.to_string(),
+                result: result.to_string(),
+                is_error,
+            },
+        );
+    }
+    fn emit_permission(
+        &self,
+        session_id: &str,
+        request_id: &str,
+        tool: &str,
+        args: &str,
+        summary: &str,
+    ) {
+        let _ = self.app.emit(
+            "agent://permission",
+            AgentPermissionEvent {
+                session_id: session_id.to_string(),
+                request_id: request_id.to_string(),
+                tool: tool.to_string(),
+                args: args.to_string(),
+                summary: summary.to_string(),
+            },
+        );
+    }
+    fn emit_done(&self, session_id: &str, text: &str, reason: &str, error: Option<&str>) {
+        let _ = self.app.emit(
+            "agent://done",
+            AgentDoneEvent {
+                session_id: session_id.to_string(),
+                text: text.to_string(),
+                reason: reason.to_string(),
+                error: error.map(|s| s.to_string()),
+            },
+        );
+    }
 }
 
 // ---------- Parsing del stream de llama-server ----------
@@ -121,7 +230,7 @@ struct AccCall {
 /// Decide si usar la ruta nativa para el modelo cargado, según la preferencia del usuario.
 /// En `"auto"` aplica una heurística por familia/tamaño del modelo (las familias con
 /// tool-calling fiable van por nativo; los modelos chicos siguen con GBNF, más robusto).
-fn use_native_tools(pref: &str, model_name: &str) -> bool {
+pub fn use_native_tools(pref: &str, model_name: &str) -> bool {
     match pref {
         "native" => true,
         "grammar" => false,
@@ -154,7 +263,10 @@ fn auto_native(model_name: &str) -> bool {
     NATIVE.iter().any(|s| n.contains(s))
 }
 
+// ---------- Entradas públicas ----------
+
 /// Lanza un turno de agente en una tarea en segundo plano y emite eventos `agent://*`.
+/// Ruta Tauri: usa `TauriSink` y resuelve permisos vía la UI (`AppState`).
 pub async fn run_agent(
     app: AppHandle,
     state: Arc<AppState>,
@@ -163,7 +275,7 @@ pub async fn run_agent(
     mode: String,
     user_input: String,
 ) -> AppResult<()> {
-    let mode = AgentMode::from_str(&mode);
+    let mode_enum = AgentMode::from_str(&mode);
     let port = *state.server_port.lock().await;
     if port == 0 {
         return Err(AppError::Busy(
@@ -184,40 +296,86 @@ pub async fn run_agent(
         working_dir: PathBuf::from(&working_dir),
     };
 
+    let sink = Arc::new(TauriSink { app: app.clone() });
+    let state_clone = state.clone();
+    let session_id_clone = session_id.clone();
     tokio::spawn(async move {
         let res = run_inner(
-            &app,
-            &state,
+            sink.as_ref(),
+            Some(&state_clone),
+            false,            // no auto-allow: la UI aprueba cada Ask
+            true,             // persistir sesión
             port,
             &settings,
             &active_model,
-            &session_id,
+            &session_id_clone,
             &working_dir,
-            mode,
+            mode_enum,
             &ctx,
             user_input,
             cancel,
         )
         .await;
 
-        state.cancel_tokens.lock().await.remove(&session_id);
+        state_clone.cancel_tokens.lock().await.remove(&session_id_clone);
 
+        let sink = TauriSink { app };
         match res {
-            Ok((text, reason)) => emit_done(&app, &session_id, &text, &reason, None),
+            Ok((text, reason)) => sink.emit_done(&session_id_clone, &text, &reason, None),
             Err(AppError::Other(ref m)) if m == "cancelled" => {
-                emit_done(&app, &session_id, "", "cancelled", Some("cancelled".into()))
+                sink.emit_done(&session_id_clone, "", "cancelled", Some("cancelled"))
             }
-            Err(e) => emit_done(&app, &session_id, "", "error", Some(e.to_string())),
+            Err(e) => sink.emit_done(&session_id_clone, "", "error", Some(&e.to_string())),
         }
     });
 
     Ok(())
 }
 
+/// Entrada headless: ejecuta UN turno de agente contra un `llama-server` ya levantado en
+/// `port`, con permisos auto-aprobados (`auto_allow = true`) y sin persistir sesión. Pensada
+/// para harnesses de test/eval que quieren ejercitar el mismo `run_inner` que la app real.
+///
+/// Devuelve `(texto_final, reason)` donde `reason` ∈ {"done","max_steps","loop","cancelled",...}.
+pub async fn run_turn(
+    sink: &dyn LoopSink,
+    port: u16,
+    settings: &Settings,
+    active_model: &str,
+    working_dir: &str,
+    mode: &str,
+    user_input: String,
+    cancel: CancellationToken,
+) -> AppResult<(String, String)> {
+    let mode_enum = AgentMode::from_str(mode);
+    let ctx = tools::ToolCtx {
+        working_dir: PathBuf::from(working_dir),
+    };
+    let session_id = uuid::Uuid::new_v4().to_string();
+    run_inner(
+        sink,
+        None,        // sin AppState en headless
+        true,        // auto-approve: el harness decide todo
+        false,       // no persistir sesión (evita basura en ~/.local/share)
+        port,
+        settings,
+        active_model,
+        &session_id,
+        working_dir,
+        mode_enum,
+        &ctx,
+        user_input,
+        cancel,
+    )
+    .await
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn run_inner(
-    app: &AppHandle,
-    state: &Arc<AppState>,
+    sink: &dyn LoopSink,
+    state: Option<&Arc<AppState>>,
+    auto_allow: bool,
+    persist: bool,
     port: u16,
     settings: &Settings,
     active_model: &str,
@@ -243,13 +401,23 @@ async fn run_inner(
     );
 
     // Límite de tokens de la respuesta por paso y presupuesto de contexto para el prompt.
-    let step_max_tokens = (settings.max_tokens as usize).min(1024);
-    let ctx_budget = (settings.context_size as usize)
-        .saturating_sub(step_max_tokens + 256)
+    // Se respeta el `max_tokens` del usuario; solo se acota por el contexto disponible
+    // (no por un tope fijo, que truncaba a mitad de un `write_file` con contenido largo).
+    let step_max_tokens = (settings.max_tokens as usize)
+        .min((settings.context_size as usize).saturating_sub(256).max(256));
+    // Presupuesto de contexto para el prompt. Reservamos ~25% del contexto para (respuesta
+    // del paso + el error de estimación de `approx_tokens` + margen de seguridad). Esto es
+    // crítico: `approx_tokens` (bytes/3) subestima los tokens reales del tokenizer en código
+    // y números (~1 token/cácter), lo que con un margen chico hacía desbordar el KV-cache:
+    // una conversación que `budget_view` creía dentro del presupuesto era rechazada por
+    // llama-server con "request exceeds the available context size" (verificado en eval con
+    // Qwen3.5-4B, tarea r3, 8248 tokens reales vs 8192 de ctx).
+    let ctx_budget = ((settings.context_size as usize) * 3 / 4)
+        .saturating_sub(step_max_tokens)
         .max(512);
 
     // Cargar la sesión previa (memoria entre turnos) o iniciar una nueva.
-    let prev = session_store::load(session_id);
+    let prev = if persist { session_store::load(session_id) } else { None };
     let title = prev
         .as_ref()
         .map(|s| s.title.clone())
@@ -280,18 +448,12 @@ async fn run_inner(
             return Err(AppError::Other("cancelled".into()));
         }
 
-        let _ = app.emit(
-            "agent://step",
-            AgentStepEvent {
-                session_id: session_id.to_string(),
-                step,
-                phase: "model_start".into(),
-            },
-        );
+        sink.emit_step(session_id, step, "model_start");
 
         // Al cruzar el presupuesto, compactar: resumir los turnos antiguos con una llamada
         // dedicada al modelo y sustituirlos por un único resumen (en vez de borrarlos).
-        match context::maybe_compact(&client, &url, settings, &mut convo, ctx_budget, &cancel).await
+        match context::maybe_compact(&client, &url, settings, &mut convo, ctx_budget, &cancel)
+            .await
         {
             Ok(true) => tracing::info!("contexto compactado en el paso {step}"),
             Ok(false) => {}
@@ -305,9 +467,29 @@ async fn run_inner(
         let request_msgs = budget_view(&convo, ctx_budget);
         let out = infer_step(
             &client, &url, settings, step_max_tokens, native, &grammar, &tools_schema,
-            &request_msgs, app, session_id, &cancel,
+            &request_msgs, sink, session_id, &cancel,
         )
-        .await?;
+        .await;
+        // DEBUG: si la inferencia falla por exceso de contexto, volcar el request para
+        // diagnosticar qué mensaje está disparando el desbordamiento (env AGENT_EVAL_DEBUG).
+        if let Err(AppError::Inference(ref m)) = out {
+            if m.contains("exceeds the available context size") {
+                if std::env::var("AGENT_EVAL_DEBUG").is_ok() {
+                    eprintln!("\n=== CONTEXT OVERFLOW DEBUG (paso {step}) ===");
+                    let total_approx: usize = request_msgs.iter().map(|x| approx_tokens(&x.content) + 4).sum();
+                    eprintln!("total approx = {total_approx}, msgs = {}", request_msgs.len());
+                    for (i, m) in request_msgs.iter().enumerate() {
+                        let a = approx_tokens(&m.content) + 4;
+                        let tag = m.tool_name.as_deref().unwrap_or("");
+                        let snip: String = m.content.chars().take(120).collect();
+                        eprintln!("  [{i}] role={:?} tool={tag} approx={a} len_bytes={} lines={} | {snip:?}",
+                            m.role, m.content.len(), m.content.lines().count());
+                    }
+                    eprintln!("=== fin debug ===\n");
+                }
+            }
+        }
+        let out = out?;
 
         if native {
             // Ruta nativa: sin tool_calls ⇒ el modelo dio su respuesta final en texto.
@@ -320,8 +502,8 @@ async fn run_inner(
             let mut aborted = false;
             for call in out.tool_calls {
                 let flow = process_call(
-                    app, state, &registry, ctx, mode, session_id, step, &cancel, &mut convo,
-                    &mut seen, &call.name, &call.args, Some(call.id),
+                    sink, state, auto_allow, &registry, ctx, mode, session_id, step, &cancel,
+                    &mut convo, &mut seen, &call.name, &call.args, Some(call.id),
                 )
                 .await?;
                 if let CallFlow::Loop = flow {
@@ -339,7 +521,14 @@ async fn run_inner(
             let (tool, args) = match parse_tool_call(&raw) {
                 Ok(v) => v,
                 Err(e) => {
-                    convo.push(AgentMsg::assistant(raw.clone()));
+                    // La gramática GBNF debería forzar JSON válido; si llegamos aquí fue por
+                    // truncado de `max_tokens` a mitad de un string largo o por un caso raro
+                    // del modelo. Guardar el raw completo (hasta ~1024 tokens) en el contexto
+                    // lo infla sin valor informativo y puede desbordar el KV-cache en pocos
+                    // pasos. Truncamos a un prefijo como evidencia para el modelo.
+                    let snippet: String = raw.chars().take(400).collect();
+                    let ellipsis = if raw.chars().count() > 400 { " …[truncado]" } else { "" };
+                    convo.push(AgentMsg::assistant(format!("{snippet}{ellipsis}")));
                     convo.push(AgentMsg::harness_error(format!(
                         "Tu respuesta no fue un objeto JSON válido ({e}). Responde con un único objeto JSON con la forma {{\"tool\": ..., \"args\": ...}}."
                     )));
@@ -353,8 +542,8 @@ async fn run_inner(
                 break;
             }
             let flow = process_call(
-                app, state, &registry, ctx, mode, session_id, step, &cancel, &mut convo,
-                &mut seen, &tool, &args, None,
+                sink, state, auto_allow, &registry, ctx, mode, session_id, step, &cancel,
+                &mut convo, &mut seen, &tool, &args, None,
             )
             .await?;
             if let CallFlow::Loop = flow {
@@ -364,18 +553,20 @@ async fn run_inner(
         }
     }
 
-    // Persistir la sesión (historial completo) tras completar el turno.
-    let sess = session_store::StoredSession {
-        id: session_id.to_string(),
-        title,
-        working_dir: working_dir.to_string(),
-        mode: mode.as_str().to_string(),
-        created,
-        updated: session_store::now_iso(),
-        messages: convo,
-    };
-    if let Err(e) = session_store::save(&sess) {
-        tracing::warn!("no se pudo guardar la sesión {}: {e}", session_id);
+    // Persistir la sesión (historial completo) tras completar el turno, si aplica.
+    if persist {
+        let sess = session_store::StoredSession {
+            id: session_id.to_string(),
+            title,
+            working_dir: working_dir.to_string(),
+            mode: mode.as_str().to_string(),
+            created,
+            updated: session_store::now_iso(),
+            messages: convo,
+        };
+        if let Err(e) = session_store::save(&sess) {
+            tracing::warn!("no se pudo guardar la sesión {}: {e}", session_id);
+        }
     }
 
     Ok(outcome)
@@ -386,8 +577,9 @@ async fn run_inner(
 /// y actualiza `seen`; devuelve `Loop` si la firma se repitió demasiadas veces.
 #[allow(clippy::too_many_arguments)]
 async fn process_call(
-    app: &AppHandle,
-    state: &Arc<AppState>,
+    sink: &dyn LoopSink,
+    state: Option<&Arc<AppState>>,
+    auto_allow: bool,
     registry: &Registry,
     ctx: &tools::ToolCtx,
     mode: AgentMode,
@@ -405,7 +597,7 @@ async fn process_call(
     // Validar args contra el esquema de la herramienta antes de cualquier otra cosa.
     if let Err(e) = registry.validate(tool, args) {
         let msg = format!("argumentos inválidos: {e}");
-        emit_tool(app, session_id, step, tool, &args_str, &msg, true);
+        sink.emit_tool(session_id, step, tool, &args_str, &msg, true);
         convo.push(AgentMsg::tool_result(tool, msg, true).with_call_id(call_id));
         return Ok(CallFlow::Continue);
     }
@@ -426,41 +618,71 @@ async fn process_call(
              No repitas la misma llamada. Si ya tienes la información necesaria, entrega tu \
              respuesta final."
         );
-        emit_tool(app, session_id, step, tool, &args_str, &nudge, true);
+        sink.emit_tool(session_id, step, tool, &args_str, &nudge, true);
         convo.push(AgentMsg::harness_note(nudge));
         return Ok(CallFlow::Continue);
     }
 
     // Evaluar permisos según el modo y el riesgo de la herramienta.
     let risk = registry.risk(tool);
-    let decision = match risk {
+    let mut decision = match risk {
         Some(r) => permissions::decide(mode, r),
         None => Decision::Allow, // herramienta desconocida: execute() devolverá error
     };
+    // En modo headless (auto_allow) convierte cualquier Ask en Allow sin tocar la UI.
+    // En modo Tauri: "Permitir siempre" de un turno anterior en esta misma sesión ya no
+    // se vuelve a preguntar por esta herramienta (no degrada un Deny duro, solo evita el Ask).
+    if decision == Decision::Ask {
+        if auto_allow {
+            decision = Decision::Allow;
+        } else if let Some(state) = state {
+            let remembered = state
+                .session_allow
+                .lock()
+                .await
+                .get(session_id)
+                .is_some_and(|set| set.contains(tool));
+            if remembered {
+                decision = Decision::Allow;
+            }
+        }
+    }
     let allowed = match decision {
         Decision::Allow => true,
         Decision::Deny => {
             let msg = format!("La herramienta '{tool}' está denegada en el modo actual (plan).");
-            emit_tool(app, session_id, step, tool, &args_str, &msg, true);
+            sink.emit_tool(session_id, step, tool, &args_str, &msg, true);
             convo.push(AgentMsg::tool_result(tool, msg, true).with_call_id(call_id));
             return Ok(CallFlow::Continue);
         }
-        Decision::Ask => request_permission(app, state, session_id, tool, args, cancel).await?,
+        Decision::Ask => {
+            // Solo reachable en modo Tauri (auto_allow convierte Ask en Allow arriba).
+            match state {
+                Some(state) => request_permission(sink, state, session_id, tool, args, cancel)
+                    .await?,
+                None => true, // defensa: si llegamos aquí sin state, permitimos.
+            }
+        }
     };
     if !allowed {
         let msg = "El usuario denegó la ejecución de esta herramienta.".to_string();
-        emit_tool(app, session_id, step, tool, &args_str, &msg, true);
+        sink.emit_tool(session_id, step, tool, &args_str, &msg, true);
         convo.push(AgentMsg::tool_result(tool, msg, true).with_call_id(call_id));
         return Ok(CallFlow::Continue);
     }
 
-    // Ejecutar herramienta.
+    // Ejecutar herramienta. La salida completa se emite a la UI; la copia que entra al
+    // contexto del modelo se trunca a `RESULT_CTX_CAP` chars para que una única lectura
+    // densa (p.ej. un archivo numérico de cientos de líneas) no llene solo el contexto
+    // chico (8k). El modelo puede paginar con offset/limit para ver el resto. Es la misma
+    // política que Claude Code: las tools no son parishe de volcado libre.
     let (result, is_error) = match registry.execute(tool, args, ctx).await {
         Ok(out) => (out, false),
         Err(e) => (e.to_string(), true),
     };
-    emit_tool(app, session_id, step, tool, &args_str, &result, is_error);
-    convo.push(AgentMsg::tool_result(tool, result, is_error).with_call_id(call_id));
+    sink.emit_tool(session_id, step, tool, &args_str, &result, is_error);
+    let capped = cap_for_context(&result);
+    convo.push(AgentMsg::tool_result(tool, capped, is_error).with_call_id(call_id));
 
     // Una escritura o ejecución exitosa cambia el mundo: las firmas previas ya no son evidencia
     // de bucle (p.ej. releer un archivo tras modificarlo es legítimo).
@@ -481,7 +703,7 @@ async fn infer_step(
     grammar: &str,
     tools_schema: &Value,
     convo: &[AgentMsg],
-    app: &AppHandle,
+    sink: &dyn LoopSink,
     session_id: &str,
     cancel: &CancellationToken,
 ) -> AppResult<StepOutput> {
@@ -541,13 +763,13 @@ async fn infer_step(
                     if let Some(choice) = parsed.choices.first() {
                         if let Some(tok) = choice.delta.reasoning_content.as_ref() {
                             if !tok.is_empty() {
-                                emit_token(app, session_id, tok, true);
+                                sink.emit_token(session_id, tok, true);
                             }
                         }
                         if let Some(tok) = choice.delta.content.as_ref() {
                             if !tok.is_empty() {
                                 content.push_str(tok);
-                                emit_token(app, session_id, tok, false);
+                                sink.emit_token(session_id, tok, false);
                             }
                         }
                         if let Some(tcs) = choice.delta.tool_calls.as_ref() {
@@ -611,7 +833,7 @@ fn build_step_output(content: String, acc: Vec<AccCall>) -> StepOutput {
 }
 
 /// Extrae `{tool, args}` de la respuesta del modelo, tolerando texto sobrante.
-fn parse_tool_call(raw: &str) -> Result<(String, Value), String> {
+pub fn parse_tool_call(raw: &str) -> Result<(String, Value), String> {
     let json_slice = extract_json_object(raw).ok_or("no se encontró un objeto JSON")?;
     let v: Value = serde_json::from_str(json_slice).map_err(|e| e.to_string())?;
     let tool = v
@@ -685,8 +907,9 @@ fn budget_view(convo: &[AgentMsg], budget: usize) -> Vec<AgentMsg> {
 }
 
 /// Solicita confirmación al usuario y espera su respuesta (o la cancelación del turno).
+/// Ruta Tauri: emite `agent://permission` y bloquea hasta el `respond_permission` del frontend.
 async fn request_permission(
-    app: &AppHandle,
+    sink: &dyn LoopSink,
     state: &Arc<AppState>,
     session_id: &str,
     tool: &str,
@@ -694,33 +917,39 @@ async fn request_permission(
     cancel: &CancellationToken,
 ) -> AppResult<bool> {
     let request_id = uuid::Uuid::new_v4().to_string();
-    let (tx, rx) = tokio::sync::oneshot::channel::<bool>();
+    let (tx, rx) = tokio::sync::oneshot::channel::<permissions::PermissionResponse>();
     state
         .pending_permissions
         .lock()
         .await
         .insert(request_id.clone(), tx);
 
-    let _ = app.emit(
-        "agent://permission",
-        AgentPermissionEvent {
-            session_id: session_id.to_string(),
-            request_id: request_id.clone(),
-            tool: tool.to_string(),
-            args: serde_json::to_string(args).unwrap_or_else(|_| "{}".into()),
-            summary: permission_summary(tool, args),
-        },
+    sink.emit_permission(
+        session_id,
+        &request_id,
+        tool,
+        &serde_json::to_string(args).unwrap_or_else(|_| "{}".into()),
+        &permission_summary(tool, args),
     );
 
-    let approved = tokio::select! {
+    let resp = tokio::select! {
         _ = cancel.cancelled() => {
             state.pending_permissions.lock().await.remove(&request_id);
             return Err(AppError::Other("cancelled".into()));
         }
-        r = rx => r.unwrap_or(false),
+        r = rx => r.unwrap_or(permissions::PermissionResponse { approved: false, remember: false }),
     };
     state.pending_permissions.lock().await.remove(&request_id);
-    Ok(approved)
+    if resp.approved && resp.remember {
+        state
+            .session_allow
+            .lock()
+            .await
+            .entry(session_id.to_string())
+            .or_default()
+            .insert(tool.to_string());
+    }
+    Ok(resp.approved)
 }
 
 /// Resumen legible de la acción que se va a confirmar.
@@ -734,47 +963,20 @@ fn permission_summary(tool: &str, args: &Value) -> String {
     }
 }
 
-fn emit_tool(
-    app: &AppHandle,
-    session_id: &str,
-    step: usize,
-    tool: &str,
-    args: &str,
-    result: &str,
-    is_error: bool,
-) {
-    let _ = app.emit(
-        "agent://tool",
-        AgentToolEvent {
-            session_id: session_id.to_string(),
-            step,
-            tool: tool.to_string(),
-            args: args.to_string(),
-            result: result.to_string(),
-            is_error,
-        },
-    );
-}
+/// Tope de caracteres (aprox) de una tool result que entra al CONTEXTO del modelo. La
+/// UI recibe la salida completa; al modelo se le entrega a lo sumo `RESULT_CTX_CAP` chars
+/// con un aviso de truncado, para que una tool no llene sola un contexto chico. El modelo
+/// puede paginar (read_file offset/limit) para ver el resto. Es la estrategia de Claude
+/// Code.
+const RESULT_CTX_CAP: usize = 6000;
 
-fn emit_token(app: &AppHandle, session_id: &str, token: &str, is_reasoning: bool) {
-    let _ = app.emit(
-        "agent://token",
-        AgentTokenEvent {
-            session_id: session_id.to_string(),
-            token: token.to_string(),
-            is_reasoning,
-        },
-    );
-}
-
-fn emit_done(app: &AppHandle, session_id: &str, text: &str, reason: &str, error: Option<String>) {
-    let _ = app.emit(
-        "agent://done",
-        AgentDoneEvent {
-            session_id: session_id.to_string(),
-            text: text.to_string(),
-            reason: reason.to_string(),
-            error,
-        },
-    );
+fn cap_for_context(s: &str) -> String {
+    let total = s.chars().count();
+    if total <= RESULT_CTX_CAP {
+        return s.to_string();
+    }
+    let head: String = s.chars().take(RESULT_CTX_CAP).collect();
+    format!(
+        "{head}\n\n… [salida truncada a {RESULT_CTX_CAP} de {total} caracteres para ahorrar contexto; usá offset/limit o grep para ver el resto]"
+    )
 }

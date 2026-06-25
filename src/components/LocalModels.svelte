@@ -3,6 +3,7 @@
   import { api } from "../lib/api";
   import type { LoadProgress, LocalModel, ModelStatus } from "../lib/types";
   import Icon from "./Icon.svelte";
+  import ModelFamilyBadge from "./ModelFamilyBadge.svelte";
 
   let {
     status,
@@ -20,6 +21,8 @@
 
   let loadingId = $state<string | null>(null);
   let menuOpen = $state<string | null>(null);
+  let confirmDelete = $state<LocalModel | null>(null);
+  let deleting = $state(false);
 
   async function refresh() {
     loading = true;
@@ -67,14 +70,19 @@
     }
   }
 
-  async function remove(m: LocalModel) {
-    if (!confirm(`¿Eliminar ${m.name}?\n(${m.size_human})`)) return;
+  async function confirmRemove() {
+    const m = confirmDelete;
+    if (!m) return;
+    deleting = true;
     try {
       await api.deleteModel(m.path);
+      confirmDelete = null;
       await refresh();
       onRefresh();
     } catch (e: any) {
       alert("Error: " + String(e));
+    } finally {
+      deleting = false;
     }
   }
 
@@ -104,6 +112,7 @@
     {:else}
       {#each local as m (m.path)}
         <div class="local-row" class:active={isActive(m)}>
+          <ModelFamilyBadge name={m.name} />
           <div class="col" style="flex:1;min-width:0">
             <div class="row" style="gap:6px">
               <span class="name" title={m.name}>{m.name}</span>
@@ -142,7 +151,7 @@
             </button>
             {#if menuOpen === m.path}
               <div class="menu" role="presentation">
-                <button class="menu-item danger" onclick={() => { menuOpen = null; remove(m); }}>
+                <button class="menu-item danger" onclick={() => { menuOpen = null; confirmDelete = m; }}>
                   <Icon name="x" size="sm" /> Eliminar
                 </button>
               </div>
@@ -168,6 +177,43 @@
     {/if}
   </div>
 </div>
+
+{#if confirmDelete}
+  <div
+    class="overlay"
+    role="presentation"
+    onclick={() => !deleting && (confirmDelete = null)}
+    onkeydown={(e) => e.key === "Escape" && !deleting && (confirmDelete = null)}
+  >
+    <div
+      class="confirm-box"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+    >
+      <div class="row" style="gap:8px;align-items:flex-start">
+        <span class="confirm-ico"><Icon name="alert" size="lg" /></span>
+        <div class="col" style="gap:4px">
+          <div class="confirm-title">Eliminar {confirmDelete.name}</div>
+          <div class="dim small">
+            Esto borra el archivo del disco ({confirmDelete.size_human}) de forma permanente. No
+            hay papelera: si lo necesitas de nuevo, tendrás que volver a descargarlo.
+          </div>
+        </div>
+      </div>
+      <div class="row confirm-actions">
+        <button class="ghost" disabled={deleting} onclick={() => (confirmDelete = null)}>
+          Mantener archivo
+        </button>
+        <button class="danger-btn" disabled={deleting} onclick={confirmRemove}>
+          {deleting ? "Eliminando…" : "Eliminar definitivamente"}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .lm-head {
@@ -208,14 +254,17 @@
     border-radius: var(--radius);
     margin-bottom: 6px;
     background: var(--bg-2);
-    transition: border-color var(--t-fast), background var(--t-fast);
+    opacity: 0.6;
+    transition: border-color var(--t-fast), background var(--t-fast), opacity var(--t-fast);
   }
   .local-row:hover {
     background: var(--bg-3);
+    opacity: 1;
   }
   .local-row.active {
     border-color: var(--accent-border);
     background: var(--accent-bg);
+    opacity: 1;
   }
   .local-row.active:hover {
     background: var(--accent-bg-strong);
@@ -283,5 +332,58 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    animation: fade-in 0.12s var(--ease);
+  }
+  .confirm-box {
+    width: 360px;
+    background: var(--bg-3);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .confirm-ico {
+    color: var(--error);
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .confirm-title {
+    font-weight: 600;
+    font-size: 13.5px;
+    color: var(--text-0);
+  }
+  .confirm-actions {
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .danger-btn {
+    border: 1px solid var(--error);
+    color: var(--error);
+    background: var(--error-bg);
+    border-radius: var(--radius-sm);
+    padding: 7px 12px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .danger-btn:hover {
+    background: var(--error);
+    color: #fff;
+  }
+  .danger-btn:disabled,
+  .confirm-actions .ghost:disabled {
+    opacity: 0.6;
+    pointer-events: none;
   }
 </style>

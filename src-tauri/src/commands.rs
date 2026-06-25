@@ -251,9 +251,13 @@ pub async fn respond_permission(
     state: State<'_, Arc<crate::state::AppState>>,
     request_id: String,
     approved: bool,
+    remember: Option<bool>,
 ) -> AppResult<()> {
     if let Some(tx) = state.pending_permissions.lock().await.remove(&request_id) {
-        let _ = tx.send(approved);
+        let _ = tx.send(crate::agent::permissions::PermissionResponse {
+            approved,
+            remember: remember.unwrap_or(false),
+        });
     }
     Ok(())
 }

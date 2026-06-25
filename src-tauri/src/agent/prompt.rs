@@ -99,7 +99,9 @@ Herramientas disponibles:
 Reglas:
 - No inventes el contenido de los archivos: léelos con read_file antes de afirmar nada sobre ellos.
 - No repitas una herramienta con los mismos argumentos: el resultado sería idéntico.
-- En cuanto tengas la información pedida, da tu respuesta final en texto plano. No sigas explorando."#
+- En cuanto tengas la información pedida, da tu respuesta final en texto plano. No sigas explorando.
+- Nunca anuncies en tu respuesta final un paso que aún no ejecutaste ("a continuación haré...", "luego generaré..."). Si la tarea requiere más pasos, ejecútalos con herramientas ahora; tu respuesta final solo describe lo que ya hiciste.
+- Reporta los resultados con honestidad: si algo falló o quedó sin hacer, dilo explícitamente; no afirmes que algo está hecho o verificado si no lo comprobaste con una herramienta."#
         )
     } else {
         format!(
@@ -117,7 +119,9 @@ Reglas:
 - Usa exactamente una herramienta por paso. Tras ver su resultado, decide el siguiente paso.
 - No inventes el contenido de los archivos: léelos con read_file antes de afirmar nada sobre ellos.
 - NUNCA repitas una herramienta con los mismos argumentos: el resultado sería idéntico.
-- En cuanto el resultado de una herramienta ya contenga la información pedida, responde de inmediato con la herramienta "final". No sigas explorando si ya tienes la respuesta."#
+- En cuanto el resultado de una herramienta ya contenga la información pedida, responde de inmediato con la herramienta "final". No sigas explorando si ya tienes la respuesta.
+- "final" significa que la tarea YA está terminada. Nunca lo uses para anunciar pasos futuros ("a continuación generaré...", "luego convertiré..."): si faltan pasos, ejecútalos primero con las herramientas correspondientes y solo llama a "final" cuando el trabajo esté hecho de verdad.
+- Reporta los resultados con honestidad: si algo falló o quedó sin hacer, dilo explícitamente en el texto de "final"; no afirmes que algo está hecho o verificado si no lo comprobaste con una herramienta."#
         )
     }
 }

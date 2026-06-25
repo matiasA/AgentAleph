@@ -33,6 +33,14 @@ pub enum Decision {
     Deny,
 }
 
+/// Respuesta del usuario a una solicitud de permiso (`agent://permission`).
+#[derive(Clone, Copy)]
+pub struct PermissionResponse {
+    pub approved: bool,
+    /// Si se pidió "permitir siempre": no volver a preguntar por esta herramienta en la sesión.
+    pub remember: bool,
+}
+
 /// Política por defecto en función del modo y el riesgo de la herramienta.
 pub fn decide(mode: AgentMode, risk: Risk) -> Decision {
     match (mode, risk) {

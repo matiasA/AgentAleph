@@ -2,7 +2,7 @@ use crate::agent::tools::{ParamSpec, ParamType, ToolDoc};
 
 /// Primitivas JSON compartidas por todas las reglas de args.
 const JSON_PRIMS: &str = r###"string ::= "\"" char* "\"" ws
-char ::= [^"\\] | "\\" (["\\/bfnrt] | "u" hex hex hex hex)
+char ::= [^"\\\x7F\x00-\x1F] | "\\" (["\\/bfnrt] | "u" hex hex hex hex)
 hex ::= [0-9a-fA-F]
 number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ws
 boolean ::= ("true" | "false") ws

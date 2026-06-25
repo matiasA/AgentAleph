@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { open } from "@tauri-apps/plugin-dialog";
   import Icon from "./Icon.svelte";
+  import BrandLogo from "./BrandLogo.svelte";
   import { api } from "../lib/api";
   import type { Skill } from "../lib/types";
   import {
@@ -30,9 +31,9 @@
   let textVal = $state("");
 
   // Conexiones: maqueta deshabilitada (la app es 100% local; integración futura).
-  const connections = [
-    { name: "GitHub", desc: "Repos, issues y PRs" },
-    { name: "Google", desc: "Drive, Calendar, búsqueda" },
+  const connections: { name: string; desc: string; logo: "github" | "google" }[] = [
+    { name: "GitHub", desc: "Repos, issues y PRs", logo: "github" },
+    { name: "Google", desc: "Drive, Calendar, búsqueda", logo: "google" },
   ];
 
   onMount(refreshSkills);
@@ -197,7 +198,7 @@
       <div class="list">
         {#each connections as c (c.name)}
           <div class="conn-card" aria-disabled="true">
-            <span class="conn-ico"><Icon name="http" /></span>
+            <span class="conn-ico"><BrandLogo name={c.logo} size={18} /></span>
             <span class="skill-text">
               <span class="skill-title">{c.name}</span>
               <span class="skill-desc">{c.desc}</span>
@@ -318,14 +319,15 @@
     align-items: center;
     gap: 4px;
     font-size: 11px;
-    padding: 4px 8px;
+    font-weight: 500;
+    padding: 5px 9px;
     border-radius: var(--radius-sm);
-    border: 1px solid var(--border-soft);
-    background: var(--bg-2);
+    border: 1px solid transparent;
+    background: transparent;
     color: var(--text-1);
   }
   .mini-btn:hover:not(:disabled) {
-    background: var(--bg-3);
+    background: var(--bg-hover);
     color: var(--text-0);
   }
   .mini-btn:disabled {
@@ -334,7 +336,6 @@
   .mini-btn.primary {
     background: var(--accent-bg);
     color: var(--accent-2);
-    border-color: var(--accent-border);
   }
 
   .create-form {
@@ -387,9 +388,14 @@
     width: 30px;
     height: 30px;
     border-radius: var(--radius-sm);
+    flex: none;
+  }
+  .skill-ico {
     background: var(--accent-bg);
     color: var(--accent-2);
-    flex: none;
+  }
+  .conn-ico {
+    background: #fff;
   }
   .skill-text {
     display: flex;
@@ -440,17 +446,6 @@
   }
   .toggle.on .knob {
     transform: translateX(13px);
-  }
-  .icon-btn {
-    display: inline-flex;
-    color: var(--text-3);
-    background: transparent;
-    border: none;
-    padding: 2px;
-    flex: none;
-  }
-  .icon-btn:hover {
-    color: var(--text-0);
   }
   .soon {
     font-size: 10px;

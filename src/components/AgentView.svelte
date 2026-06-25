@@ -173,11 +173,11 @@
     }
   }
 
-  async function respond(approved: boolean) {
+  async function respond(approved: boolean, remember = false) {
     if (!pending) return;
     const req = pending.request_id;
     pending = null;
-    await api.respondPermission(req, approved);
+    await api.respondPermission(req, approved, remember);
   }
 
   async function stop() {
@@ -399,9 +399,15 @@
       <div class="perm-text">
         <span class="perm-tag">permiso</span>
         El agente quiere: <strong>{pending.summary}</strong>
+        <div class="dim small" style="margin-top:2px">
+          "Permitir siempre" no volverá a preguntar por <strong>{pending.tool}</strong> en esta sesión.
+        </div>
       </div>
       <div class="row" style="gap:8px">
         <button class="danger small-btn" onclick={() => respond(false)}>Rechazar</button>
+        <button class="ghost small-btn" onclick={() => respond(true, true)}>
+          Permitir siempre
+        </button>
         <button class="solid small-btn" onclick={() => respond(true)}>Permitir</button>
       </div>
     </div>

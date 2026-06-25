@@ -41,8 +41,8 @@ export const api = {
   agentSend: (sessionId: string, workingDir: string, mode: string, input: string) =>
     invoke<void>("agent_send", { sessionId, workingDir, mode, input }),
   agentStop: (sessionId: string) => invoke<void>("agent_stop", { sessionId }),
-  respondPermission: (requestId: string, approved: boolean) =>
-    invoke<void>("respond_permission", { requestId, approved }),
+  respondPermission: (requestId: string, approved: boolean, remember = false) =>
+    invoke<void>("respond_permission", { requestId, approved, remember }),
   listAgentSessions: () => invoke<SessionMeta[]>("list_agent_sessions"),
   loadAgentSession: (id: string) =>
     invoke<StoredSession | null>("load_agent_session", { id }),

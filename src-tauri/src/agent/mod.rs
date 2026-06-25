@@ -8,4 +8,4 @@ pub mod session_store;
 pub mod skills;
 pub mod tools;
 
-pub use agent_loop::run_agent;
+pub use agent_loop::{run_agent, run_turn, LoopSink};

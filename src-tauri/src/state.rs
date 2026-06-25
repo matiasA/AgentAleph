@@ -48,8 +48,15 @@ pub struct AppState {
     pub sessions: Mutex<std::collections::HashMap<String, ChatSession>>,
     pub cancel_tokens: Mutex<std::collections::HashMap<String, tokio_util::sync::CancellationToken>>,
     /// Permisos de agente en espera de confirmación del usuario, por request id.
-    pub pending_permissions:
-        Mutex<std::collections::HashMap<String, tokio::sync::oneshot::Sender<bool>>>,
+    pub pending_permissions: Mutex<
+        std::collections::HashMap<
+            String,
+            tokio::sync::oneshot::Sender<crate::agent::permissions::PermissionResponse>,
+        >,
+    >,
+    /// Herramientas que el usuario marcó "permitir siempre" en una sesión: ya no se vuelve a
+    /// preguntar por ellas dentro de esa misma sesión (se pierde al reiniciar la app).
+    pub session_allow: Mutex<std::collections::HashMap<String, std::collections::HashSet<String>>>,
 }
 
 impl AppState {
@@ -70,6 +77,7 @@ impl AppState {
             sessions: Mutex::new(Default::default()),
             cancel_tokens: Mutex::new(Default::default()),
             pending_permissions: Mutex::new(Default::default()),
+            session_allow: Mutex::new(Default::default()),
         }
     }
 

@@ -40,6 +40,7 @@
     check: `<path d="m20 6-11 11-5-5"/>`,
     stop: `<rect x="6" y="6" width="12" height="12" rx="2"/>`,
     spark: `<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/>`,
+    alert: `<path d="M12 3 2 20h20z"/><path d="M12 10v4"/><path d="M12 17h0"/>`,
   };
 
   const inner = $derived(paths[name] ?? "");
