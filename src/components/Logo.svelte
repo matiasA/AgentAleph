@@ -1,142 +1,174 @@
 <script lang="ts">
-  // Pulsar (estrella de neutrones) dibujado en SVG: núcleo brillante + dos
-  // jets relativistas + halo ecuatorial, con un pulso lento y sutil.
-  // Vectorial → nítido a cualquier tamaño y legible en claro y oscuro.
+  // Marca oficial: anillo + estela de cometa (dos recortes con fondo
+  // eliminado, uno claro para fondos oscuros y uno oscuro para modo claro,
+  // alternados vía [data-mode] igual que el resto de tokens de tema).
+  //
+  // El brillo estelar (destello + chispas) vive en una capa recortada con
+  // mask-image usando la propia imagen como máscara: así el brillo sólo se
+  // ve sobre los píxeles opacos del trazo (el anillo y la estela), nunca
+  // fuera de la silueta del logo.
+  import logoLight from "../assets/logo-mark-light.png";
+  import logoDark from "../assets/logo-mark-dark.png";
+
   let { size = 40 }: { size?: number } = $props();
 </script>
 
-<span class="ns" style="--sz:{size}px" aria-label="Agent Aleph">
-  <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <defs>
-      <radialGradient id="ns-core" cx="50%" cy="50%" r="50%">
-        <stop offset="0%" stop-color="#f4f0ff" />
-        <stop offset="34%" stop-color="#c4b0ff" />
-        <stop offset="70%" stop-color="#8b5cf6" />
-        <stop offset="100%" stop-color="#5b3fd0" />
-      </radialGradient>
-      <radialGradient id="ns-glow" cx="50%" cy="50%" r="50%">
-        <stop offset="0%" stop-color="#a98bff" stop-opacity="0.85" />
-        <stop offset="45%" stop-color="#7c6cff" stop-opacity="0.35" />
-        <stop offset="100%" stop-color="#5b8cff" stop-opacity="0" />
-      </radialGradient>
-      <linearGradient id="ns-jet" x1="50" y1="2" x2="50" y2="98"
-        gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stop-color="#7fb0ff" stop-opacity="0" />
-        <stop offset="38%" stop-color="#9cc4ff" stop-opacity="0.55" />
-        <stop offset="50%" stop-color="#eaf2ff" stop-opacity="0.95" />
-        <stop offset="62%" stop-color="#9cc4ff" stop-opacity="0.55" />
-        <stop offset="100%" stop-color="#7fb0ff" stop-opacity="0" />
-      </linearGradient>
-      <filter id="ns-blur" x="-60%" y="-60%" width="220%" height="220%">
-        <feGaussianBlur stdDeviation="1.4" />
-      </filter>
-      <filter id="ns-blur-lg" x="-80%" y="-80%" width="260%" height="260%">
-        <feGaussianBlur stdDeviation="4" />
-      </filter>
-    </defs>
-
-    <!-- halo exterior difuso -->
-    <circle class="glow" cx="50" cy="50" r="30" fill="url(#ns-glow)" filter="url(#ns-blur-lg)" />
-
-    <g transform="rotate(24 50 50)">
-      <!-- bulbo ecuatorial (perpendicular a los jets) -->
-      <ellipse cx="50" cy="50" rx="26" ry="11" fill="url(#ns-glow)"
-        filter="url(#ns-blur)" opacity="0.6" />
-      <!-- jets: spindle ancho difuso + filamento fino brillante -->
-      <path class="jets" filter="url(#ns-blur)" fill="url(#ns-jet)"
-        d="M50 3 C 54.5 28 54.5 72 50 97 C 45.5 72 45.5 28 50 3 Z" />
-      <path class="jets" fill="url(#ns-jet)"
-        d="M50 6 C 51.4 30 51.4 70 50 94 C 48.6 70 48.6 30 50 6 Z" />
-    </g>
-
-    <!-- núcleo -->
-    <circle class="core-glow" cx="50" cy="50" r="15" fill="url(#ns-glow)" filter="url(#ns-blur)" />
-    <circle class="core" cx="50" cy="50" r="10.5" fill="url(#ns-core)"
-      stroke="#6d4be0" stroke-opacity="0.4" stroke-width="0.6" />
-    <circle cx="47.5" cy="47" r="2.6" fill="#ffffff" fill-opacity="0.9" />
-  </svg>
+<span class="logo" style="--sz:{size}px" aria-label="Agent Aleph">
+  <span class="mark mark-light">
+    <img src={logoLight} alt="" draggable="false" />
+    <span class="shine" style="-webkit-mask-image:url({logoLight});mask-image:url({logoLight})" aria-hidden="true">
+      <span class="glint"></span>
+      <span class="star star-a"></span>
+      <span class="star star-b"></span>
+    </span>
+  </span>
+  <span class="mark mark-dark">
+    <img src={logoDark} alt="" draggable="false" />
+    <span class="shine" style="-webkit-mask-image:url({logoDark});mask-image:url({logoDark})" aria-hidden="true">
+      <span class="glint"></span>
+      <span class="star star-a"></span>
+      <span class="star star-b"></span>
+    </span>
+  </span>
 </span>
 
 <style>
-  .ns {
+  .logo {
     width: var(--sz);
     height: var(--sz);
     display: inline-flex;
+    position: relative;
     flex: none;
   }
-  .ns svg {
+
+  .mark {
+    position: absolute;
+    inset: 0;
+    animation: logo-breathe 4.4s ease-in-out infinite;
+    filter: drop-shadow(0 0 calc(var(--sz) * 0.08) var(--accent-glow));
+  }
+  .mark img {
     width: 100%;
     height: 100%;
-    overflow: visible;
+    object-fit: contain;
+    display: block;
   }
 
-  .core,
-  .core-glow,
-  .glow,
-  .jets {
-    transform-box: fill-box;
-    transform-origin: center;
+  .mark-dark {
+    display: none;
   }
-  .core {
-    animation: ns-core 4.4s ease-in-out infinite;
+  :global([data-mode="light"]) .mark-light {
+    display: none;
   }
-  .core-glow {
-    animation: ns-coreglow 4.4s ease-in-out infinite;
-  }
-  .glow {
-    animation: ns-halo 4.4s ease-in-out infinite;
-  }
-  .jets {
-    animation: ns-jets 4.4s ease-in-out infinite;
+  :global([data-mode="light"]) .mark-dark {
+    display: block;
   }
 
-  @keyframes ns-core {
-    0%,
-    100% {
-      transform: scale(1);
-    }
-    50% {
-      transform: scale(1.04);
-    }
+  /* Capa de brillo recortada a la silueta exacta del logo (su propio canal
+     alfa como máscara), para que el destello y las chispas nunca se salgan
+     del trazo. */
+  .shine {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    -webkit-mask-size: 100% 100%;
+    mask-repeat: no-repeat;
+    mask-position: center;
+    mask-size: 100% 100%;
   }
-  @keyframes ns-coreglow {
+
+  /* Estrella fugaz: un destello que recorre la estela de la marca. */
+  .glint {
+    position: absolute;
+    left: -18%;
+    top: 80%;
+    width: 36%;
+    height: 36%;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--accent-2) 0%, var(--accent) 45%, transparent 72%);
+    filter: blur(1px);
+    opacity: 0;
+    animation: logo-glint 5.2s cubic-bezier(0.3, 0.7, 0.4, 1) infinite;
+  }
+
+  /* Chispas que titilan junto a los dos puntos del diseño original. */
+  .star {
+    position: absolute;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--accent-2) 0%, transparent 72%);
+  }
+  .star-a {
+    left: 68%;
+    top: 35%;
+    width: 12%;
+    height: 12%;
+    animation: logo-twinkle 2.8s ease-in-out infinite;
+  }
+  .star-b {
+    left: 76%;
+    top: 35%;
+    width: 8%;
+    height: 8%;
+    animation: logo-twinkle 2.8s ease-in-out infinite 1.3s;
+  }
+
+  @keyframes logo-breathe {
     0%,
     100% {
-      transform: scale(1);
-      opacity: 0.75;
+      opacity: 0.92;
     }
     50% {
-      transform: scale(1.12);
       opacity: 1;
     }
   }
-  @keyframes ns-halo {
-    0%,
-    100% {
-      transform: scale(0.94);
-      opacity: 0.5;
+
+  @keyframes logo-glint {
+    0% {
+      left: -18%;
+      top: 80%;
+      opacity: 0;
+    }
+    10% {
+      opacity: 1;
     }
     50% {
-      transform: scale(1.06);
-      opacity: 0.8;
+      left: 82%;
+      top: -18%;
+      opacity: 1;
+    }
+    62% {
+      opacity: 0;
+    }
+    100% {
+      left: 82%;
+      top: -18%;
+      opacity: 0;
     }
   }
-  @keyframes ns-jets {
+
+  @keyframes logo-twinkle {
     0%,
     100% {
-      opacity: 0.8;
+      opacity: 0.2;
+      transform: scale(0.6);
     }
     50% {
       opacity: 1;
+      transform: scale(1.2);
     }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .core,
-    .core-glow,
-    .glow,
-    .jets {
+    .mark,
+    .glint,
+    .star {
       animation: none;
+    }
+    .glint {
+      opacity: 0;
     }
   }
 </style>

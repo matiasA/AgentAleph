@@ -1,4 +1,9 @@
-<p align="center"><img src="docs/logo.svg" alt="Agent Aleph" width="96" /></p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/logo-light.png">
+    <img src="docs/logo-dark.png" alt="Agent Aleph" width="96" />
+  </picture>
+</p>
 
 # Agent Aleph
 
