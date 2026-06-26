@@ -72,11 +72,24 @@ bundle.
 - **Sesiones persistentes** con memoria entre turnos.
 
 ### Modelos
-- **Catálogo curado** (Qwen 3.5 / 3.6, Llama 4, Phi-4, Gemma 4, Mistral…) + búsqueda libre en HF Hub.
+- **Catálogo curado** (Qwen 3.5 / 3.6, Phi-4, Gemma 4, incluidas variantes MoE y QAT) +
+  búsqueda libre y exploración del HF Hub (por descargas, likes, tendencia o recientes).
+- **Navegación por temática**: chips de uso (Código, Razonamiento, Sin censura, Agente,
+  Roleplay, Legal, Médico, Finanzas) que lanzan búsquedas curadas en HF. Para áreas con
+  poco material (legal/médico/finanzas) se sugieren primero **generalistas fuertes** del
+  catálogo y luego los especializados, con su aviso.
+- **Badge "¿te entra?"**: cada modelo muestra 🟢 / 🟡 / 🔴 según tu hardware detectado —
+  suma la **VRAM libre de tus GPUs + la RAM** (con más peso en VRAM) y te dice si correrá
+  fluido, lento (offload a CPU) o si no entra. Sin tener que descifrar tamaños y cuantizaciones.
+- **Catálogo y temas editables sin recompilar**: se cargan de un `catalog.json` local
+  (`~/.config/agent-aleph/catalog.json`) con fallback embebido; personalizá modelos o
+  agregá temas a mano.
 - **Descarga con progreso** (velocidad, cancelable) de archivos GGUF.
 - **Carga con progreso en %** y barra en vivo durante la inicialización del modelo.
 - **Gestión local**: listar, cargar, expulsar, eliminar; carpetas de modelos externas.
 - **Chat con streaming** token-a-token (modo "Ask" sin herramientas).
+- **Paneles laterales redimensionables**: arrastrá los bordes de la barra lateral y del panel
+  derecho; los anchos se recuerdan entre sesiones.
 
 ### Inferencia
 - Ajustes: system prompt, temperature, top_p, max_tokens, context size, repeat penalty,
@@ -135,38 +148,48 @@ La app crea estos directorios:
 
 ---
 
-## Habilitar GPU (NVIDIA, opcional)
+## GPU
 
-El bundle usa el build **CPU** de llama.cpp. Para offload a GPU:
+`setup-llama.sh` baja por defecto el build **Vulkan x64**, así que el offload a GPU
+funciona out-of-the-box con NVIDIA, AMD e Intel (vía Vulkan) — la app detecta tus GPUs y su
+VRAM libre, lo refleja en el badge "¿te entra?" y reparte capas automáticamente. En
+*Ajustes* podés dejar el **auto-fit** o fijar las **GPU layers** a mano.
 
-1. Descargá un build con GPU de `llama-server` desde
-   [llama.cpp releases](https://github.com/ggml-org/llama.cpp/releases)
-   (ej. el paquete CUDA o Vulkan para Linux x64).
-2. Reemplazá el contenido de `src-tauri/binaries/llama-linux-x64/` con esos binarios + `.so`.
-3. En *Ajustes* → **GPU layers** subí el valor (o dejá el auto-fit).
+¿Preferís otro backend? Pasá `LLAMA_FLAVOR` al script:
+
+```bash
+LLAMA_FLAVOR=x64          ./scripts/setup-llama.sh   # CPU puro
+LLAMA_FLAVOR=rocm-7.2-x64 ./scripts/setup-llama.sh   # AMD ROCm
+LLAMA_FLAVOR=sycl-fp16-x64 ./scripts/setup-llama.sh  # Intel oneAPI
+```
 
 Los binarios traen sus propias librerías runtime, así que funcionan sin instalar el toolkit
-en el sistema.
+en el sistema. Para un build CUDA específico, reemplazá el contenido de
+`src-tauri/binaries/llama-linux-x64/` con los binarios + `.so` del release de
+[llama.cpp](https://github.com/ggml-org/llama.cpp/releases).
 
 ---
 
 ## Modelos recomendados según hardware
 
-> Actualizado a **junio de 2026**. Generaciones vigentes: **Qwen 3.5 / 3.6**,
-> **Gemma 4**, **Llama 4**, **Phi-4**. Tamaños aproximados para cuantización **Q4_K_M**.
+> Actualizado a **junio de 2026**. Generaciones vigentes en el catálogo: **Qwen 3.5 / 3.6**,
+> **Gemma 4**, **Phi-4**. Tamaños aproximados para cuantización **Q4_K_M**.
+>
+> 💡 No hace falta que memorices esta tabla: la app detecta tu GPU + RAM y marca cada modelo
+> con 🟢 / 🟡 / 🔴 ("¿te entra?"). Esto es solo una referencia rápida.
 
 | Hardware | Modelo recomendado (Q4_K_M) | Tamaño aprox. |
 |----------|-----------------------------|---------------|
-| 8 GB RAM, CPU | Qwen 3.5 0.8B / Gemma 4 (mini) | ~0.6–1 GB |
+| 8 GB RAM, CPU | Qwen 3.5 0.8B / 2B | ~0.5–1.3 GB |
 | 16 GB RAM, CPU | Qwen 3.5 4B / Phi-4 mini | ~2.5 GB |
-| 16 GB RAM + GPU 8 GB | Qwen 3.5 9B / Llama 4 8B | ~5 GB |
-| 24–32 GB RAM/VRAM | Qwen 3.5 Coder 14B / Gemma 4 12B | ~8–9 GB |
-| 32 GB+ RAM (MoE) | Qwen 3.6 35B-A3B *(MoE, ~3B activos → rápido)* | ~18–20 GB |
+| 16 GB RAM + GPU 6–8 GB | Qwen 3.5 9B / Gemma 4 E4B | ~5 GB |
+| 24–32 GB RAM/VRAM | Phi-4 14B / Gemma 4 12B | ~7–9 GB |
+| 32 GB+ RAM o VRAM (MoE) | Qwen 3.6 35B-A3B *(MoE, ~3B activos → rápido)* | ~18–22 GB |
 
-Para el **modo agente** conviene un modelo *coder* (p. ej. **Qwen 3.5 Coder 14B**) o un
-**MoE** como **Qwen 3.6 35B-A3B**, que rinde como un modelo grande pero corre rápido porque
-solo activa ~3B de parámetros por token. Los modelos muy chicos (≤1B) sirven para probar el
-flujo, pero fallan más en tareas reales.
+Para el **modo agente** conviene un modelo fuerte en código/tools (usá el chip **Código** o
+**Agente** para buscarlos) o un **MoE** como **Qwen 3.6 35B-A3B**, que rinde como un modelo
+grande pero corre rápido porque solo activa ~3B de parámetros por token. Los modelos muy
+chicos (≤1B) sirven para probar el flujo, pero fallan más en tareas reales.
 
 ---
 

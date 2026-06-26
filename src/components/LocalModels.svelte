@@ -1,6 +1,6 @@
 <script lang="ts">
   import { open } from "@tauri-apps/plugin-dialog";
-  import { api } from "../lib/api";
+  import { api, modelFit, detectHardware, type Hardware, type Fit } from "../lib/api";
   import type { LoadProgress, LocalModel, ModelStatus } from "../lib/types";
   import Icon from "./Icon.svelte";
   import ModelFamilyBadge from "./ModelFamilyBadge.svelte";
@@ -19,6 +19,26 @@
   let dirs = $state<string[]>([]);
   let loading = $state(true);
 
+  // Hardware detectado para el badge "te entra" y la marca de modelo óptimo.
+  let hardware = $state<Hardware | null>(null);
+  let hwLabel = $state("");
+  let contextSize = $state(4096);
+
+  function fitFor(m: LocalModel): Fit {
+    return modelFit(m.size_bytes / 1e9, contextSize, hardware);
+  }
+
+  // Modelo óptimo: el más grande (mayor capacidad) que aún corre fluido (verde);
+  // si ninguno entra holgado, el más grande que al menos sea usable (ámbar).
+  let optimalPath = $derived.by(() => {
+    if (!hardware || local.length === 0) return null;
+    const ranked = [...local].sort((a, b) => b.size_bytes - a.size_bytes);
+    const green = ranked.find((m) => fitFor(m).level === "green");
+    if (green) return green.path;
+    const amber = ranked.find((m) => fitFor(m).level === "amber");
+    return amber ? amber.path : null;
+  });
+
   let loadingId = $state<string | null>(null);
   let menuOpen = $state<string | null>(null);
   let confirmDelete = $state<LocalModel | null>(null);
@@ -36,6 +56,11 @@
 
   $effect(() => {
     refresh();
+    detectHardware().then((hw) => {
+      hardware = hw.hardware;
+      hwLabel = hw.label;
+      contextSize = hw.contextSize;
+    });
   });
 
   async function addFolder() {
@@ -98,6 +123,11 @@
       <Icon name="folder-plus" size="sm" /> Carpeta
     </button>
   </div>
+  {#if hwLabel}
+    <div class="hwbar" title="Estimamos qué modelos te entran según tu memoria libre">
+      <span>🖥️</span><span class="small">Tu equipo: {hwLabel}</span>
+    </div>
+  {/if}
   <div class="scroll" style="padding:6px 10px 10px">
     {#if loading}
       <div class="muted small" style="padding:10px 4px">Cargando…</div>
@@ -111,7 +141,8 @@
       </div>
     {:else}
       {#each local as m (m.path)}
-        <div class="local-row" class:active={isActive(m)}>
+        {@const fit = fitFor(m)}
+        <div class="local-row" class:active={isActive(m)} class:optimal={optimalPath === m.path}>
           <ModelFamilyBadge name={m.name} />
           <div class="col" style="flex:1;min-width:0">
             <div class="row" style="gap:6px">
@@ -119,8 +150,18 @@
               {#if isActive(m)}
                 <span class="tag accent">activo</span>
               {/if}
+              {#if optimalPath === m.path}
+                <span class="tag optimal-tag" title="Mejor equilibrio entre capacidad y rendimiento para tu equipo">★ óptimo</span>
+              {/if}
             </div>
-            <div class="dim small">{m.size_human}</div>
+            <div class="row" style="gap:6px;align-items:center">
+              <span class="dim small">{m.size_human}</span>
+              {#if fit.level !== "unknown"}
+                <span class="fit fit-{fit.level}" title={fit.detail}>
+                  <span class="dot"></span>{fit.label}
+                </span>
+              {/if}
+            </div>
           </div>
           <div class="row" style="gap:4px;position:relative">
             {#if isActive(m)}
@@ -268,6 +309,60 @@
   }
   .local-row.active:hover {
     background: var(--accent-bg-strong);
+  }
+  .local-row.optimal {
+    opacity: 1;
+    border-color: color-mix(in srgb, #2ea043 45%, transparent);
+  }
+  .hwbar {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    margin: 0 14px 4px;
+    padding: 7px 10px;
+    background: var(--bg-2);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-sm);
+    color: var(--text-2);
+    line-height: 1.45;
+  }
+  .hwbar > span:last-child {
+    flex: 1;
+    min-width: 0;
+  }
+  .optimal-tag {
+    color: #2ea043;
+    background: color-mix(in srgb, #2ea043 16%, transparent);
+    font-weight: 600;
+  }
+  .fit {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 7px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .fit .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .fit-green {
+    color: #2ea043;
+    background: color-mix(in srgb, #2ea043 16%, transparent);
+  }
+  .fit-amber {
+    color: #d29922;
+    background: color-mix(in srgb, #d29922 16%, transparent);
+  }
+  .fit-red {
+    color: #f85149;
+    background: color-mix(in srgb, #f85149 16%, transparent);
   }
   .name {
     font-weight: 500;

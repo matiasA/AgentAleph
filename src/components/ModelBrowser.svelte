@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api, modelFit, type Hardware, type Fit } from "../lib/api";
+  import { api, modelFit, detectHardware, type Hardware, type Fit } from "../lib/api";
   import type { CatalogModel, HfModel, HfFile, Topic } from "../lib/types";
   import ModelCard from "./ModelCard.svelte";
   import Select from "./Select.svelte";
@@ -49,36 +49,16 @@
   ];
 
   $effect(() => {
-    Promise.all([
-      api.listCatalog(),
-      api.listTopics(),
-      api.listGpus().catch(() => []),
-      api.systemMemory().catch(() => ({ total_mb: 0, free_mb: 0 })),
-      api.getSettings().catch(() => null),
-    ]).then(([c, tp, gpus, mem, s]) => {
-      catalog = c;
-      topics = tp;
-      loading = false;
-      if (s) contextSize = s.context_size;
-      // Sumo la VRAM libre de TODAS las GPUs aprovechables (descarto iGPU con ~0,
-      // p. ej. Intel UHD). El presupuesto total para "te entra" es VRAM + RAM.
-      const usableGpus = gpus
-        .filter((g) => g.free_mb >= 1024)
-        .sort((a, b) => b.free_mb - a.free_mb);
-      const vramFreeMb = usableGpus.reduce((s, g) => s + g.free_mb, 0);
-      const hasGpu = vramFreeMb >= 1024;
-      hardware = { hasGpu, vramFreeMb, ramFreeMb: mem.free_mb };
-
-      const ramGb = (mem.free_mb / 1024).toFixed(0);
-      if (hasGpu) {
-        const vramGb = (vramFreeMb / 1024).toFixed(1);
-        const totalGb = ((vramFreeMb + mem.free_mb) / 1024).toFixed(0);
-        const gpuName = usableGpus.length > 1 ? `${usableGpus.length} GPUs` : usableGpus[0].name;
-        hwLabel = `${gpuName} · ${vramGb} GB VRAM + ${ramGb} GB RAM (${totalGb} GB útiles)`;
-      } else {
-        hwLabel = `CPU · ${ramGb} GB RAM libre`;
+    Promise.all([api.listCatalog(), api.listTopics(), detectHardware()]).then(
+      ([c, tp, hw]) => {
+        catalog = c;
+        topics = tp;
+        loading = false;
+        hardware = hw.hardware;
+        hwLabel = hw.label;
+        contextSize = hw.contextSize;
       }
-    });
+    );
   });
 
   function fitFor(m: CatalogModel): Fit {

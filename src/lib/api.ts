@@ -219,6 +219,46 @@ export function modelFit(sizeGb: number, contextSize: number, hw: Hardware | nul
   return { level: "red", label: "No te entra", detail: "Supera tu RAM disponible." };
 }
 
+/** Hardware detectado + etiqueta legible + tamaño de contexto, para el badge "te entra". */
+export interface HardwareInfo {
+  hardware: Hardware;
+  label: string;
+  contextSize: number;
+}
+
+/**
+ * Detecta GPUs + RAM libre y los normaliza en un único presupuesto VRAM+RAM.
+ * Compartido entre el Catálogo y los modelos locales para no duplicar el cálculo.
+ */
+export async function detectHardware(): Promise<HardwareInfo> {
+  const [gpus, mem, s] = await Promise.all([
+    api.listGpus().catch(() => [] as GpuDevice[]),
+    api.systemMemory().catch(() => ({ total_mb: 0, free_mb: 0 } as SystemMemory)),
+    api.getSettings().catch(() => null),
+  ]);
+  // Sumo la VRAM libre de TODAS las GPUs aprovechables (descarto iGPU con ~0,
+  // p. ej. Intel UHD). El presupuesto total para "te entra" es VRAM + RAM.
+  const usableGpus = gpus
+    .filter((g) => g.free_mb >= 1024)
+    .sort((a, b) => b.free_mb - a.free_mb);
+  const vramFreeMb = usableGpus.reduce((sum, g) => sum + g.free_mb, 0);
+  const hasGpu = vramFreeMb >= 1024;
+  const hardware: Hardware = { hasGpu, vramFreeMb, ramFreeMb: mem.free_mb };
+
+  const ramGb = (mem.free_mb / 1024).toFixed(0);
+  let label: string;
+  if (hasGpu) {
+    const vramGb = (vramFreeMb / 1024).toFixed(1);
+    const totalGb = ((vramFreeMb + mem.free_mb) / 1024).toFixed(0);
+    const gpuName = usableGpus.length > 1 ? `${usableGpus.length} GPUs` : usableGpus[0].name;
+    label = `${gpuName} · ${vramGb} GB VRAM + ${ramGb} GB RAM (${totalGb} GB útiles)`;
+  } else {
+    label = `CPU · ${ramGb} GB RAM libre`;
+  }
+
+  return { hardware, label, contextSize: s ? s.context_size : 4096 };
+}
+
 export function humanSize(n: number): string {
   if (n >= 1e9) return (n / 1e9).toFixed(2) + " GB";
   if (n >= 1e6) return (n / 1e6).toFixed(1) + " MB";

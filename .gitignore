@@ -29,3 +29,6 @@ CLAUDE.md
 # Binarios pesados de llama.cpp (se obtienen con scripts/setup-llama.sh)
 /src-tauri/binaries/*
 !/src-tauri/binaries/README.md
+
+# Landing page (no sincronizar)
+/WEB/

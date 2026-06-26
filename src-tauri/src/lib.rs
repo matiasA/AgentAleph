@@ -77,6 +77,24 @@ pub fn run() {
             );
             Ok(())
         })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                let state = window.state::<Arc<AppState>>();
+                let state = state.inner().clone();
+                std::thread::spawn(move || {
+                    let rt = tokio::runtime::Runtime::new().unwrap();
+                    rt.block_on(async {
+                        let mut server = state.server.lock().await;
+                        if let Some(h) = server.as_mut() {
+                            let _ = h.kill().await;
+                        }
+                        *server = None;
+                    });
+                })
+                .join()
+                .ok();
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
