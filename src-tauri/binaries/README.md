@@ -1,20 +1,20 @@
-# Binarios de llama.cpp
+# llama.cpp Binaries
 
-Esta carpeta debe contener el binario precompilado `llama-server` de llama.cpp
-junto con sus librerías (`*.so`), en `llama-linux-x64/`.
+This folder must contain the precompiled llama.cpp `llama-server` binary and its runtime
+libraries (`*.so`) inside `llama-linux-x64/`.
 
-**No se versionan en git** porque son pesados (~130 MB). Obtenelos con:
+They are **not versioned in git** because they are large (~130 MB). Download them with:
 
 ```bash
 ./scripts/setup-llama.sh
 ```
 
-Eso descarga el release fijado (por defecto `b9754`, variante `vulkan-x64`) y lo
-deja en `llama-linux-x64/`. Para un build CPU puro:
+That downloads the pinned release (default: `b9754`, `vulkan-x64` flavor) and places it in
+`llama-linux-x64/`. For a CPU-only build:
 
 ```bash
 LLAMA_FLAVOR=x64 ./scripts/setup-llama.sh
 ```
 
-La CI (`.github/workflows/build.yml`) corre este mismo script antes de compilar
-los instalables, así que no hace falta commitear nada acá.
+CI (`.github/workflows/build.yml`) runs the same script before building installers, so these
+binaries do not need to be committed.

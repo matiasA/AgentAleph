@@ -1,6 +1,7 @@
 {
   "name": "agent-aleph",
   "private": true,
+  "description": "Local-first AI coding agent and GGUF model manager powered by llama.cpp.",
   "version": "0.2.0-beta.4",
   "type": "module",
   "scripts": {

@@ -1,8 +1,8 @@
 name: Build installers
 
-# Genera los instalables (.deb / .AppImage) cuando lo pidamos:
-#   - manualmente desde la pestaña "Actions" (botón "Run workflow")
-#   - automáticamente al empujar un tag vX.Y.Z (además crea un Release)
+# Builds installers (.deb / .AppImage) when requested:
+#   - manually from the Actions tab with "Run workflow"
+#   - automatically when pushing a vX.Y.Z tag, also creating a Release
 on:
   workflow_dispatch:
   push:
@@ -10,7 +10,7 @@ on:
       - "v*"
 
 permissions:
-  contents: write # para crear Releases en tags
+  contents: write # required to create Releases from tags
 
 jobs:
   build-linux:
@@ -19,7 +19,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Dependencias del sistema (Tauri 2)
+      - name: System dependencies (Tauri 2)
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -41,7 +41,7 @@ jobs:
       - name: Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache de Cargo
+      - name: Cargo cache
         uses: actions/cache@v4
         with:
           path: |
@@ -51,19 +51,19 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
-      - name: Instalar deps JS
+      - name: Install JS dependencies
         run: npm ci
 
-      - name: Descargar binario de llama.cpp
+      - name: Download llama.cpp binary
         run: ./scripts/setup-llama.sh
 
-      - name: Build de la app (genera .deb y .AppImage)
+      - name: Build app (.deb and .AppImage)
         run: npm run tauri build
 
-      - name: Listar artefactos
+      - name: List artifacts
         run: ls -lh src-tauri/target/release/bundle/deb src-tauri/target/release/bundle/appimage
 
-      - name: Subir instalables como artefactos
+      - name: Upload installers as artifacts
         uses: actions/upload-artifact@v4
         with:
           name: agent-aleph-linux
@@ -73,11 +73,11 @@ jobs:
             src-tauri/target/release/bundle/deb/*.deb
             src-tauri/target/release/bundle/appimage/*.AppImage
 
-      - name: Crear/actualizar Release (solo en tags)
+      - name: Create/update Release (tags only)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          # Un tag con guion (v0.2.0-beta.1) se publica como prerelease/beta.
+          # Tags with a hyphen (v0.2.0-beta.1) are published as prereleases.
           prerelease: ${{ contains(github.ref_name, '-') }}
           generate_release_notes: true
           files: |
