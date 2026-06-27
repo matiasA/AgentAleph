@@ -4,83 +4,83 @@
   "topics": [
     {
       "id": "code",
-      "label": "Código",
+      "label": "Code",
       "icon": "💻",
       "tier": "rich",
-      "blurb": "Programar, depurar y explicar código",
+      "blurb": "Program, debug, and explain code",
       "hf_queries": ["coder", "code"],
       "recommended_model_ids": ["qwen3.5-9b"],
       "note": null
     },
     {
       "id": "reasoning",
-      "label": "Razonamiento",
+      "label": "Reasoning",
       "icon": "🧠",
       "tier": "rich",
-      "blurb": "Lógica, matemáticas y paso a paso",
+      "blurb": "Logic, math, and step-by-step work",
       "hf_queries": ["reasoning", "thinking"],
       "recommended_model_ids": ["phi-4-mini-reasoning", "qwen3.5-9b"],
       "note": null
     },
     {
       "id": "uncensored",
-      "label": "Sin censura",
+      "label": "Uncensored",
       "icon": "🔓",
       "tier": "rich",
-      "blurb": "Sin filtros de seguridad (abliterated)",
+      "blurb": "Without safety filters (abliterated)",
       "hf_queries": ["abliterated", "uncensored"],
       "recommended_model_ids": [],
-      "note": "Modelos sin filtros de seguridad. Úsalos con criterio y responsabilidad."
+      "note": "Models without safety filters. Use them thoughtfully and responsibly."
     },
     {
       "id": "agent",
-      "label": "Agente / Tools",
+      "label": "Agent / Tools",
       "icon": "🛠️",
       "tier": "rich",
-      "blurb": "Llamada a herramientas y flujos agénticos",
+      "blurb": "Tool calling and agentic workflows",
       "hf_queries": ["hermes"],
       "recommended_model_ids": ["qwen3.5-9b"],
       "note": null
     },
     {
       "id": "roleplay",
-      "label": "Roleplay / Escritura",
+      "label": "Roleplay / Writing",
       "icon": "🎭",
       "tier": "rich",
-      "blurb": "Personajes, narrativa y escritura creativa",
+      "blurb": "Characters, narrative, and creative writing",
       "hf_queries": ["roleplay", "rp"],
       "recommended_model_ids": [],
-      "note": "Puede incluir material adulto/NSFW entre los resultados."
+      "note": "Results may include adult/NSFW material."
     },
     {
       "id": "legal",
       "label": "Legal",
       "icon": "⚖️",
       "tier": "niche",
-      "blurb": "Derecho y documentos legales",
+      "blurb": "Law and legal documents",
       "hf_queries": ["legal", "law"],
       "recommended_model_ids": ["qwen3.5-9b", "gemma-4-12b"],
-      "note": "Pocos modelos legales en GGUF y casi siempre por país. Para español, un generalista fuerte suele rendir mejor."
+      "note": "Few legal models are available in GGUF, and they are often country-specific. A strong generalist usually works better."
     },
     {
       "id": "medical",
-      "label": "Médico",
+      "label": "Medical",
       "icon": "🩺",
       "tier": "niche",
-      "blurb": "Salud y dominio biomédico",
+      "blurb": "Health and biomedical domain",
       "hf_queries": ["medical", "bio-medical"],
       "recommended_model_ids": ["qwen3.5-9b", "gemma-4-12b"],
-      "note": "No es consejo médico. Pool reducido en GGUF; un generalista fuerte suele ir mejor."
+      "note": "Not medical advice. The GGUF pool is small; a strong generalist often works better."
     },
     {
       "id": "finance",
-      "label": "Finanzas",
+      "label": "Finance",
       "icon": "💰",
       "tier": "niche",
-      "blurb": "Contabilidad y finanzas",
+      "blurb": "Accounting and finance",
       "hf_queries": ["finance"],
       "recommended_model_ids": ["qwen3.5-9b", "gemma-4-12b"],
-      "note": "Muy pocos modelos financieros en GGUF; considera un generalista fuerte."
+      "note": "Very few finance models are available in GGUF; consider a strong generalist."
     }
   ]
 }

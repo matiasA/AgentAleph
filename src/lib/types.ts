@@ -20,7 +20,7 @@ export interface HfModel {
   tags: string[];
 }
 
-/** Tema/uso para navegar el Hub por intención (espejo de Rust `catalog::Topic`). */
+/** Use-case topic for intent-based Hub browsing, mirrored from Rust `catalog::Topic`. */
 export interface Topic {
   id: string;
   label: string;
@@ -118,7 +118,7 @@ export interface ToolCall {
   args: any;
 }
 
-/** Mensaje rico de la conversación del agente (espejo de Rust `agent::message::AgentMsg`). */
+/** Rich agent conversation message, mirrored from Rust `agent::message::AgentMsg`. */
 export interface AgentMsg {
   role: "system" | "user" | "assistant" | "tool";
   content: string;

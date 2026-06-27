@@ -146,20 +146,20 @@ impl Registry {
         Value::Array(tools)
     }
 
-    /// Valida los args contra el esquema de la herramienta antes de ejecutar.
-    /// Devuelve un error legible para reinyectar al modelo si algo no cuadra.
+    /// Validate args against the tool schema before executing.
+    /// Returns a readable error to feed back to the model if something is wrong.
     pub fn validate(&self, name: &str, args: &Value) -> Result<(), String> {
         let tool = match self.tools.iter().find(|t| t.name() == name) {
             Some(t) => t,
-            None => return Ok(()), // desconocida: execute() devolverá el error
+            None => return Ok(()), // unknown: execute() will return the error
         };
         let obj = args
             .as_object()
-            .ok_or_else(|| "args debe ser un objeto JSON".to_string())?;
+            .ok_or_else(|| "args must be a JSON object".to_string())?;
         for p in tool.params() {
             match obj.get(p.name) {
                 None if p.required => {
-                    return Err(format!("falta el parámetro requerido '{}'", p.name))
+                    return Err(format!("missing required parameter '{}'", p.name))
                 }
                 None => {}
                 Some(v) => {
@@ -170,7 +170,7 @@ impl Registry {
                     };
                     if !ok {
                         return Err(format!(
-                            "el parámetro '{}' tiene un tipo inválido",
+                            "parameter '{}' has an invalid type",
                             p.name
                         ));
                     }
@@ -183,7 +183,7 @@ impl Registry {
     pub async fn execute(&self, name: &str, args: &Value, ctx: &ToolCtx) -> AppResult<String> {
         match self.tools.iter().find(|t| t.name() == name) {
             Some(t) => t.execute(args, ctx).await,
-            None => Err(AppError::NotFound(format!("herramienta desconocida: {name}"))),
+            None => Err(AppError::NotFound(format!("unknown tool: {name}"))),
         }
     }
 }
@@ -194,33 +194,33 @@ impl Default for Registry {
     }
 }
 
-// ---------- Utilidades compartidas ----------
+// ---------- Shared Utilities ----------
 
 /// Resuelve `rel` dentro de `root`. Si `must_exist` es true, el destino debe existir;
 /// si es false (para escritura), basta con que exista el directorio padre. En ambos casos
 /// se rechaza cualquier ruta que escape del directorio del proyecto.
 pub fn resolve_in_root(root: &Path, rel: &str, must_exist: bool) -> AppResult<PathBuf> {
     let canon_root = std::fs::canonicalize(root)
-        .map_err(|e| AppError::Other(format!("directorio del proyecto inválido: {e}")))?;
+        .map_err(|e| AppError::Other(format!("invalid project directory: {e}")))?;
     let joined = root.join(rel);
 
     if must_exist {
         return match std::fs::canonicalize(&joined) {
             Ok(c) if c.starts_with(&canon_root) => Ok(c),
             Ok(_) => Err(deny_escape()),
-            Err(_) => Err(AppError::NotFound(format!("ruta no encontrada: {rel}"))),
+            Err(_) => Err(AppError::NotFound(format!("path not found: {rel}"))),
         };
     }
 
-    // Para escritura: canonicalizamos el padre (debe existir) y reanexamos el nombre.
+    // For writes, canonicalize the existing parent and append the filename again.
     let parent = joined
         .parent()
-        .ok_or_else(|| AppError::Other("ruta inválida".into()))?;
+        .ok_or_else(|| AppError::Other("invalid path".into()))?;
     let name = joined
         .file_name()
-        .ok_or_else(|| AppError::Other("ruta sin nombre de archivo".into()))?;
+        .ok_or_else(|| AppError::Other("path has no filename".into()))?;
     let canon_parent = std::fs::canonicalize(parent).map_err(|_| {
-        AppError::NotFound(format!("el directorio destino no existe para: {rel}"))
+        AppError::NotFound(format!("destination directory does not exist for: {rel}"))
     })?;
     if !canon_parent.starts_with(&canon_root) {
         return Err(deny_escape());
@@ -229,7 +229,7 @@ pub fn resolve_in_root(root: &Path, rel: &str, must_exist: bool) -> AppResult<Pa
 }
 
 fn deny_escape() -> AppError {
-    AppError::Other("acceso denegado: la ruta queda fuera del directorio del proyecto".into())
+    AppError::Other("access denied: path is outside the project directory".into())
 }
 
 /// Directorios que se omiten al recorrer el árbol (ruido / volumen).

@@ -154,7 +154,7 @@
       style="left: {sidebarW}px"
       role="separator"
       aria-orientation="vertical"
-      aria-label="Redimensionar barra lateral"
+      aria-label="Resize sidebar"
       onpointerdown={(e) => startDrag("sidebar", e)}
     ></div>
   {/if}
@@ -164,7 +164,7 @@
     style="right: {panelW}px"
     role="separator"
     aria-orientation="vertical"
-    aria-label="Redimensionar panel"
+    aria-label="Resize panel"
     onpointerdown={(e) => startDrag("panel", e)}
   ></div>
 
@@ -175,7 +175,7 @@
           <Icon name="chat" size="sm" /> Chat
         </button>
         <button class="mode-tab" class:active={mode === "agent"} onclick={() => (mode = "agent")}>
-          <Icon name="agent" size="sm" /> Agente
+          <Icon name="agent" size="sm" /> Agent
         </button>
       </div>
     </div>

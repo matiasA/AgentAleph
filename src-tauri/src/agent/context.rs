@@ -1,9 +1,7 @@
-//! Gestión de contexto: compactación con resumen.
+//! Context management: summarizing compaction.
 //!
-//! Los modelos locales tienen contexto pequeño (4k–32k). Cuando la conversación supera el
-//! presupuesto, en vez de borrar mensajes del medio (que pierde información), resumimos los
-//! turnos antiguos con una llamada dedicada al modelo y los sustituimos por un único mensaje
-//! de resumen que conserva objetivos, decisiones y estado actual.
+//! Local models have smaller contexts. When a conversation exceeds budget, old turns are
+//! summarized with a dedicated model call instead of being blindly deleted.
 
 use crate::agent::message::{approx_tokens, AgentMsg, Role};
 use crate::error::{AppError, AppResult};
@@ -11,14 +9,14 @@ use crate::settings::Settings;
 use serde::Deserialize;
 use tokio_util::sync::CancellationToken;
 
-/// Cabecera siempre preservada: system prompt (0) + tarea original del usuario (1).
+/// Always-preserved header: system prompt (0) + original user task (1).
 const HEAD: usize = 2;
-/// Tope de tokens del resumen generado.
+/// Token cap for the generated summary.
 const SUMMARY_MAX_TOKENS: usize = 512;
-/// Temperatura baja para un resumen estable y fiel.
+/// Low temperature for a stable, faithful summary.
 const SUMMARY_TEMP: f32 = 0.3;
 
-/// Suma aproximada de tokens de la conversación (mismo criterio que `budget_view`).
+/// Approximate token sum for the conversation.
 pub fn total_tokens(convo: &[AgentMsg]) -> usize {
     convo.iter().map(|m| approx_tokens(&m.content) + 4).sum()
 }
@@ -80,17 +78,17 @@ pub async fn maybe_compact(
     let transcript = render_transcript(middle);
     let summary = match summarize(client, url, settings, &transcript, cancel).await {
         Ok(s) if !s.trim().is_empty() => s,
-        // Si el resumen falla o sale vacío, no rompemos el turno: `budget_view` recortará.
+        // If summarization fails or returns empty, do not break the turn: budget_view will trim.
         Ok(_) => return Ok(false),
         Err(AppError::Other(ref m)) if m == "cancelled" => return Err(AppError::Other(m.clone())),
         Err(e) => {
-            tracing::warn!("compactación: falló el resumen, se omite: {e}");
+            tracing::warn!("compaction: summarization failed, skipping: {e}");
             return Ok(false);
         }
     };
 
     let note = AgentMsg::harness_note(format!(
-        "Resumen de los pasos previos (compactados para ahorrar contexto):\n{}",
+        "Summary of previous steps, compacted to save context:\n{}",
         summary.trim()
     ));
     convo.splice(HEAD..tail_start, std::iter::once(note));
@@ -102,10 +100,10 @@ fn render_transcript(msgs: &[AgentMsg]) -> String {
     let mut out = String::new();
     for m in msgs {
         let label = match m.role {
-            Role::System => "NOTA",
-            Role::User => "USUARIO",
-            Role::Assistant => "ASISTENTE",
-            Role::Tool => "RESULTADO",
+            Role::System => "NOTE",
+            Role::User => "USER",
+            Role::Assistant => "ASSISTANT",
+            Role::Tool => "RESULT",
         };
         let tag = m.tool_name.as_deref().unwrap_or("");
         if m.role == Role::Tool && !tag.is_empty() {
@@ -130,16 +128,15 @@ async fn summarize(
         "messages": [
             {
                 "role": "system",
-                "content": "Eres un asistente que resume el historial de una sesión de un agente \
-                    de programación para liberar contexto. Resume en español, de forma concisa y \
-                    fiel, conservando: el objetivo de la tarea, las decisiones tomadas, los \
-                    hallazgos relevantes (archivos, rutas, símbolos), los cambios ya aplicados y \
-                    el estado actual / próximos pasos. No inventes nada que no aparezca. No uses \
-                    herramientas ni JSON: responde solo con el texto del resumen."
+                "content": "You summarize the history of a coding-agent session to free context. \
+                    Summarize in English, concisely and faithfully, preserving: the task objective, \
+                    decisions made, relevant findings (files, paths, symbols), changes already \
+                    applied, and current state / next steps. Do not invent anything that is not \
+                    present. Do not use tools or JSON: reply only with the summary text."
             },
             {
                 "role": "user",
-                "content": format!("Historial a resumir:\n\n{transcript}")
+                "content": format!("History to summarize:\n\n{transcript}")
             }
         ],
         "temperature": SUMMARY_TEMP,
@@ -147,7 +144,7 @@ async fn summarize(
         "repeat_penalty": settings.repeat_penalty,
         "max_tokens": SUMMARY_MAX_TOKENS,
         "stream": false,
-        // El resumen no debe gastar presupuesto en razonamiento.
+        // Summaries should not spend budget on reasoning.
         "chat_template_kwargs": { "enable_thinking": false },
     });
 
@@ -160,7 +157,7 @@ async fn summarize(
         let status = resp.status();
         let text = resp.text().await.unwrap_or_default();
         return Err(AppError::Inference(format!(
-            "HTTP {} al resumir: {}",
+            "HTTP {} while summarizing: {}",
             status,
             text.chars().take(300).collect::<String>()
         )));

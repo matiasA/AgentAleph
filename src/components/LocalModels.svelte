@@ -19,7 +19,7 @@
   let dirs = $state<string[]>([]);
   let loading = $state(true);
 
-  // Hardware detectado para el badge "te entra" y la marca de modelo óptimo.
+  // Detected hardware for the fit badge and optimal model marker.
   let hardware = $state<Hardware | null>(null);
   let hwLabel = $state("");
   let contextSize = $state(4096);
@@ -28,8 +28,8 @@
     return modelFit(m.size_bytes / 1e9, contextSize, hardware);
   }
 
-  // Modelo óptimo: el más grande (mayor capacidad) que aún corre fluido (verde);
-  // si ninguno entra holgado, el más grande que al menos sea usable (ámbar).
+  // Optimal model: the largest capable model that still runs smoothly (green);
+  // if none fits comfortably, the largest one that is at least usable (amber).
   let optimalPath = $derived.by(() => {
     if (!hardware || local.length === 0) return null;
     const ranked = [...local].sort((a, b) => b.size_bytes - a.size_bytes);
@@ -70,7 +70,7 @@
       dirs = await api.addModelDir(dir);
       await refresh();
     } catch (e: any) {
-      alert("Error añadiendo carpeta: " + String(e));
+      alert("Could not add folder: " + String(e));
     }
   }
 
@@ -89,7 +89,7 @@
       await api.loadModel(m.path);
       onRefresh();
     } catch (e: any) {
-      alert("Error cargando modelo: " + String(e));
+      alert("Could not load model: " + String(e));
     } finally {
       loadingId = null;
     }
@@ -118,25 +118,25 @@
 
 <div class="col" style="flex:1;overflow:hidden">
   <div class="lm-head">
-    <span class="section-label">Modelos locales</span>
-    <button class="add-folder" onclick={addFolder} title="Añadir carpeta de modelos">
-      <Icon name="folder-plus" size="sm" /> Carpeta
+    <span class="section-label">Local Models</span>
+    <button class="add-folder" onclick={addFolder} title="Add model folder">
+      <Icon name="folder-plus" size="sm" /> Folder
     </button>
   </div>
   {#if hwLabel}
-    <div class="hwbar" title="Estimamos qué modelos te entran según tu memoria libre">
-      <span>🖥️</span><span class="small">Tu equipo: {hwLabel}</span>
+    <div class="hwbar" title="Estimates which models fit based on your free memory">
+      <span>🖥️</span><span class="small">Your machine: {hwLabel}</span>
     </div>
   {/if}
   <div class="scroll" style="padding:6px 10px 10px">
     {#if loading}
-      <div class="muted small" style="padding:10px 4px">Cargando…</div>
+      <div class="muted small" style="padding:10px 4px">Loading...</div>
     {:else if local.length === 0}
       <div class="empty">
         <span class="empty-ico"><Icon name="box" size="lg" /></span>
-        <div class="muted">Sin modelos</div>
+        <div class="muted">No models</div>
         <div class="dim small" style="margin-top:4px">
-          Descarga uno en "Catálogo" o pulsa <strong>Carpeta</strong> para añadir tus GGUF.
+          Download one from Catalog or click <strong>Folder</strong> to add your GGUF files.
         </div>
       </div>
     {:else}
@@ -148,10 +148,10 @@
             <div class="row" style="gap:6px">
               <span class="name" title={m.name}>{m.name}</span>
               {#if isActive(m)}
-                <span class="tag accent">activo</span>
+                <span class="tag accent">active</span>
               {/if}
               {#if optimalPath === m.path}
-                <span class="tag optimal-tag" title="Mejor equilibrio entre capacidad y rendimiento para tu equipo">★ óptimo</span>
+                <span class="tag optimal-tag" title="Best balance of capability and performance for your machine">★ optimal</span>
               {/if}
             </div>
             <div class="row" style="gap:6px;align-items:center">
@@ -166,7 +166,7 @@
           <div class="row" style="gap:4px;position:relative">
             {#if isActive(m)}
               <button class="ghost small-btn" onclick={() => api.unloadModel().then(onRefresh)}>
-                Expulsar
+                Unload
               </button>
             {:else}
               <button
@@ -179,13 +179,13 @@
                     ? `${loadProgress.percent}%`
                     : "…"}
                 {:else}
-                  Cargar
+                  Load
                 {/if}
               </button>
             {/if}
             <button
               class="icon-btn"
-              title="Más"
+              title="More"
               onclick={() => (menuOpen = menuOpen === m.path ? null : m.path)}
             >
               <Icon name="dots" size="sm" />
@@ -193,7 +193,7 @@
             {#if menuOpen === m.path}
               <div class="menu" role="presentation">
                 <button class="menu-item danger" onclick={() => { menuOpen = null; confirmDelete = m; }}>
-                  <Icon name="x" size="sm" /> Eliminar
+                  <Icon name="x" size="sm" /> Delete
                 </button>
               </div>
             {/if}
@@ -204,12 +204,12 @@
 
     {#if dirs.length > 0}
       <div class="folders">
-        <div class="section-label" style="margin-bottom:8px">Carpetas externas</div>
+        <div class="section-label" style="margin-bottom:8px">External Folders</div>
         {#each dirs as d (d)}
           <div class="folder-row">
             <Icon name="folder" size="sm" />
             <span class="folder-path" title={d}>{d}</span>
-            <button class="icon-btn" onclick={() => removeFolder(d)} title="Dejar de escanear">
+            <button class="icon-btn" onclick={() => removeFolder(d)} title="Stop scanning">
               <Icon name="x" size="sm" />
             </button>
           </div>
@@ -237,19 +237,19 @@
       <div class="row" style="gap:8px;align-items:flex-start">
         <span class="confirm-ico"><Icon name="alert" size="lg" /></span>
         <div class="col" style="gap:4px">
-          <div class="confirm-title">Eliminar {confirmDelete.name}</div>
+          <div class="confirm-title">Delete {confirmDelete.name}</div>
           <div class="dim small">
-            Esto borra el archivo del disco ({confirmDelete.size_human}) de forma permanente. No
-            hay papelera: si lo necesitas de nuevo, tendrás que volver a descargarlo.
+            This permanently deletes the file from disk ({confirmDelete.size_human}). There is no
+            trash recovery: if you need it again, you will have to download it again.
           </div>
         </div>
       </div>
       <div class="row confirm-actions">
         <button class="ghost" disabled={deleting} onclick={() => (confirmDelete = null)}>
-          Mantener archivo
+          Keep file
         </button>
         <button class="danger-btn" disabled={deleting} onclick={confirmRemove}>
-          {deleting ? "Eliminando…" : "Eliminar definitivamente"}
+          {deleting ? "Deleting..." : "Delete permanently"}
         </button>
       </div>
     </div>

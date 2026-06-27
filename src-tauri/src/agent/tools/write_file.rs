@@ -12,7 +12,7 @@ impl Tool for WriteFile {
     }
 
     fn description(&self) -> &'static str {
-        "Crea o sobrescribe un archivo del proyecto."
+        "Create or overwrite a project file."
     }
 
     fn risk(&self) -> Risk {
@@ -30,20 +30,20 @@ impl Tool for WriteFile {
         let path = args
             .get("path")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| AppError::Other("write_file requiere 'path'".into()))?;
+            .ok_or_else(|| AppError::Other("write_file requires 'path'".into()))?;
         let content = args
             .get("content")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| AppError::Other("write_file requiere 'content'".into()))?;
+            .ok_or_else(|| AppError::Other("write_file requires 'content'".into()))?;
 
         let resolved = resolve_in_root(&ctx.working_dir, path, false)?;
         let existed = resolved.exists();
         tokio::fs::write(&resolved, content)
             .await
-            .map_err(|e| AppError::Other(format!("no se pudo escribir {path}: {e}")))?;
+            .map_err(|e| AppError::Other(format!("could not write {path}: {e}")))?;
 
         let bytes = content.len();
-        let verb = if existed { "sobrescrito" } else { "creado" };
-        Ok(format!("Archivo {verb}: {path} ({bytes} bytes)"))
+        let verb = if existed { "overwritten" } else { "created" };
+        Ok(format!("File {verb}: {path} ({bytes} bytes)"))
     }
 }

@@ -72,7 +72,7 @@ pub fn run() {
                 boxed
             })?;
             tracing::info!(
-                "Agent Aleph iniciado. Modelos en: {:?}",
+                "Agent Aleph started. Models at: {:?}",
                 state.models_dir
             );
             Ok(())

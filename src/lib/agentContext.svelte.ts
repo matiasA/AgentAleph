@@ -1,5 +1,5 @@
-// Estado compartido del contexto adjunto al turno del agente.
-// Lo edita el panel derecho (AgentPanel) y lo consume el envío del turno (AgentView).
+// Shared state for context attached to the next agent turn.
+// Edited by AgentPanel and consumed by AgentView when sending.
 
 export interface ContextItem {
   id: string;
@@ -23,13 +23,13 @@ export function clearContext() {
   agentContext.items = [];
 }
 
-/** Bloque de texto con el contexto adjunto, para anteponer al input del turno. */
+/** Text block with attached context to prepend to the turn input. */
 export function buildContextBlock(): string {
   if (!agentContext.items.length) return "";
-  let s = "Contexto adjunto por el usuario (tenelo en cuenta para la tarea):\n";
+  let s = "User-attached context. Consider it when working on the task:\n";
   for (const it of agentContext.items) {
-    const tag = it.kind === "file" ? `archivo: ${it.label}` : it.label;
-    const trunc = it.truncated ? "\n[… truncado …]" : "";
+    const tag = it.kind === "file" ? `file: ${it.label}` : it.label;
+    const trunc = it.truncated ? "\n[... truncated ...]" : "";
     s += `\n----- ${tag} -----\n${it.content}${trunc}\n`;
   }
   return s + "\n";

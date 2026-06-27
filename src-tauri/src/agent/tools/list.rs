@@ -12,7 +12,7 @@ impl Tool for ListDir {
     }
 
     fn description(&self) -> &'static str {
-        "Lista el contenido de un directorio del proyecto (path relativo, def \".\")."
+        "List the contents of a project directory. path is relative, default \".\"."
     }
 
     fn risk(&self) -> Risk {
@@ -27,20 +27,20 @@ impl Tool for ListDir {
         let rel = args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
         let dir = resolve_in_root(&ctx.working_dir, rel, true)?;
         if !dir.is_dir() {
-            return Err(AppError::Other(format!("no es un directorio: {rel}")));
+            return Err(AppError::Other(format!("not a directory: {rel}")));
         }
 
         let mut dirs: Vec<String> = Vec::new();
         let mut files: Vec<String> = Vec::new();
         let entries = std::fs::read_dir(&dir)
-            .map_err(|e| AppError::Other(format!("no se pudo listar {rel}: {e}")))?;
+            .map_err(|e| AppError::Other(format!("could not list {rel}: {e}")))?;
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().to_string();
             if name.starts_with('.') {
                 continue;
             }
             if entry.path().is_dir() {
-                let marker = if SKIP_DIRS.contains(&name.as_str()) { "/ (omitido)" } else { "/" };
+                let marker = if SKIP_DIRS.contains(&name.as_str()) { "/ (skipped)" } else { "/" };
                 dirs.push(format!("{name}{marker}"));
             } else {
                 files.push(name);
@@ -57,7 +57,7 @@ impl Tool for ListDir {
             out.push_str(&format!("   {f}\n"));
         }
         if out.is_empty() {
-            out = "[directorio vacío]".into();
+            out = "[empty directory]".into();
         }
         Ok(out)
     }

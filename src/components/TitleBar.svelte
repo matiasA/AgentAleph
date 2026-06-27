@@ -1,8 +1,6 @@
 <script lang="ts">
-  // Barra de título personalizada (reemplaza la nativa del SO). Estilo "Zed":
-  // barra delgada de 34px con tres zonas — navegación (izq.), estado efímero
-  // (centro-der.) y controles de ventana (extremo der.). El fondo es región de
-  // arrastre vía `data-tauri-drag-region`.
+  // Custom title bar replacing the native OS chrome. Zed-like: a slim 34px bar
+  // with navigation, ephemeral activity, and window controls.
   import { onMount } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import Icon from "./Icon.svelte";
@@ -29,12 +27,12 @@
   const win = getCurrentWindow();
   let maximized = $state(false);
 
-  // Texto efímero que comunica una tarea en segundo plano (carga / descargas).
+  // Ephemeral text for background work such as loading and downloads.
   let activity = $derived(
     loadProgress
-      ? `Cargando ${loadProgress.model_name || "modelo"}… ${Math.round(loadProgress.percent)}%`
+      ? `Loading ${loadProgress.model_name || "model"}... ${Math.round(loadProgress.percent)}%`
       : pendingDownloads > 0
-        ? `Descargando ${pendingDownloads} modelo${pendingDownloads > 1 ? "s" : ""}…`
+        ? `Downloading ${pendingDownloads} model${pendingDownloads > 1 ? "s" : ""}...`
         : null
   );
 
@@ -47,22 +45,22 @@
 </script>
 
 <header class="titlebar" data-tauri-drag-region>
-  <!-- Zona izquierda — navegación -->
+  <!-- Left navigation area -->
   <div class="zone left">
-    <button class="tb-icon" title="Menú" onclick={onToggleSidebar} aria-label="Alternar barra lateral">
+    <button class="tb-icon" title="Menu" onclick={onToggleSidebar} aria-label="Toggle sidebar">
       <Icon name="menu" size="sm" />
     </button>
     {#if status.loaded && status.model_name}
       <span class="project" title={status.model_name}>{status.model_name}</span>
     {:else}
-      <span class="project dim">Sin modelo cargado</span>
+      <span class="project dim">No model loaded</span>
     {/if}
   </div>
 
-  <!-- Centro — región de arrastre flexible -->
+  <!-- Flexible drag region -->
   <div class="zone fill" data-tauri-drag-region></div>
 
-  <!-- Zona derecha — estado efímero -->
+  <!-- Right activity area -->
   {#if activity}
     <div class="zone activity">
       <Icon name="download" size="sm" />
@@ -70,14 +68,14 @@
     </div>
   {/if}
 
-  <!-- Botón de descargas con badge -->
+  <!-- Downloads button with badge -->
   <div class="zone">
     <button
       class="dl-btn"
       class:active={downloadsOpen}
       class:pulsing={pendingDownloads > 0}
-      title="Descargas"
-      aria-label="Abrir panel de descargas"
+      title="Downloads"
+      aria-label="Open downloads panel"
       onclick={() => (downloadsOpen = !downloadsOpen)}
     >
       <Logo size={24} />
@@ -87,15 +85,15 @@
     </button>
   </div>
 
-  <!-- Extremo derecho — controles de ventana -->
+  <!-- Window controls -->
   <div class="zone controls">
-    <button class="winctl" title="Minimizar" aria-label="Minimizar" onclick={() => win.minimize()}>
+    <button class="winctl" title="Minimize" aria-label="Minimize" onclick={() => win.minimize()}>
       <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 5h8" /></svg>
     </button>
     <button
       class="winctl"
-      title={maximized ? "Restaurar" : "Maximizar"}
-      aria-label={maximized ? "Restaurar" : "Maximizar"}
+      title={maximized ? "Restore" : "Maximize"}
+      aria-label={maximized ? "Restore" : "Maximize"}
       onclick={() => win.toggleMaximize()}>
       {#if maximized}
         <svg viewBox="0 0 10 10" aria-hidden="true">
@@ -106,7 +104,7 @@
         <svg viewBox="0 0 10 10" aria-hidden="true"><rect x="1.5" y="1.5" width="7" height="7" rx="0.5" /></svg>
       {/if}
     </button>
-    <button class="winctl close" title="Cerrar" aria-label="Cerrar" onclick={() => win.close()}>
+    <button class="winctl close" title="Close" aria-label="Close" onclick={() => win.close()}>
       <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7" /></svg>
     </button>
   </div>

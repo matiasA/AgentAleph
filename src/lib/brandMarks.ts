@@ -1,6 +1,6 @@
-// Marcas monocromas (un solo trazo), tomadas de Simple Icons (CC0 1.0).
-// Las marcas en sí siguen siendo propiedad de cada empresa; se usan aquí
-// únicamente para identificar al creador del modelo/conexión.
+// Monochrome marks from Simple Icons (CC0 1.0).
+// The marks remain the property of their respective companies and are used here
+// only to identify model creators or connections.
 export interface BrandMark {
   viewBox: string;
   path: string;
@@ -29,8 +29,8 @@ export const BRAND_MARKS: Record<string, BrandMark> = {
   },
 };
 
-// Logo oficial de Google (cuatro colores) — usado tanto para la conexión
-// Google como para identificar a Gemma (familia de modelos de Google).
+// Official four-color Google logo, used for both the Google connection and
+// Gemma model-family identification.
 export const GOOGLE_G_PATHS: { fill: string; d: string }[] = [
   { fill: "#4285F4", d: "M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" },
   { fill: "#34A853", d: "M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" },

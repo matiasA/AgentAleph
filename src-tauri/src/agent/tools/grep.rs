@@ -14,7 +14,7 @@ impl Tool for Grep {
     }
 
     fn description(&self) -> &'static str {
-        "Busca un texto literal dentro de los archivos del proyecto."
+        "Search for literal text inside project files."
     }
 
     fn risk(&self) -> Risk {
@@ -32,7 +32,7 @@ impl Tool for Grep {
         let query = args
             .get("query")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| AppError::Other("grep requiere el argumento 'query'".into()))?;
+            .ok_or_else(|| AppError::Other("grep requires the 'query' argument".into()))?;
         let ignore_case = args.get("ignore_case").and_then(|v| v.as_bool()).unwrap_or(false);
         let needle = if ignore_case { query.to_lowercase() } else { query.to_string() };
 
@@ -45,7 +45,7 @@ impl Tool for Grep {
             let abs = ctx.working_dir.join(rel);
             let content = match std::fs::read_to_string(&abs) {
                 Ok(c) => c,
-                Err(_) => continue, // binario o ilegible
+                Err(_) => continue, // binary or unreadable
             };
             for (i, line) in content.lines().enumerate() {
                 let hay = if ignore_case { line.to_lowercase() } else { line.to_string() };
@@ -59,14 +59,14 @@ impl Tool for Grep {
                     ));
                     hits += 1;
                     if hits >= MAX_HITS {
-                        out.push_str(&format!("\n… [límite de {MAX_HITS} coincidencias]\n"));
+                        out.push_str(&format!("\n... [limit of {MAX_HITS} matches]\n"));
                         break 'outer;
                     }
                 }
             }
         }
         if out.is_empty() {
-            out = format!("[sin coincidencias para '{query}']");
+            out = format!("[no matches for '{query}']");
         }
         Ok(out)
     }

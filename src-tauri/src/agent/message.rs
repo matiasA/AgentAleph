@@ -153,10 +153,10 @@ pub fn to_wire(msgs: &[AgentMsg]) -> Vec<WireMsg> {
     msgs.iter()
         .map(|m| {
             if m.harness {
-                let tag = if m.is_error { "Error del sistema" } else { "Aviso del sistema" };
+                let tag = if m.is_error { "System error" } else { "System notice" };
                 return WireMsg {
                     role: "user",
-                    content: format!("[{tag}, no es el usuario]:\n{}", m.content),
+                    content: format!("[{tag}, not the user]:\n{}", m.content),
                 };
             }
             match m.role {
@@ -173,11 +173,11 @@ pub fn to_wire(msgs: &[AgentMsg]) -> Vec<WireMsg> {
                     content: m.content.clone(),
                 },
                 Role::Tool => {
-                    let name = m.tool_name.as_deref().unwrap_or("herramienta");
+                    let name = m.tool_name.as_deref().unwrap_or("tool");
                     let err = if m.is_error { " (ERROR)" } else { "" };
                     WireMsg {
                         role: "user",
-                        content: format!("Resultado de {name}{err}:\n{}", m.content),
+                        content: format!("Result from {name}{err}:\n{}", m.content),
                     }
                 }
             }
@@ -193,10 +193,10 @@ pub fn to_wire_native(msgs: &[AgentMsg]) -> Vec<serde_json::Value> {
     msgs.iter()
         .map(|m| {
             if m.harness {
-                let tag = if m.is_error { "Error del sistema" } else { "Aviso del sistema" };
+                let tag = if m.is_error { "System error" } else { "System notice" };
                 return serde_json::json!({
                     "role": "user",
-                    "content": format!("[{tag}, no es el usuario]:\n{}", m.content),
+                    "content": format!("[{tag}, not the user]:\n{}", m.content),
                 });
             }
             match m.role {

@@ -4,15 +4,15 @@
   import Select from "./Select.svelte";
 
   const cacheOptions = [
-    { value: "f16", label: "f16 (máx. calidad)" },
-    { value: "q8_0", label: "q8_0 (~50% memoria)" },
-    { value: "q4_0", label: "q4_0 (~75% memoria)" },
+    { value: "f16", label: "f16 (max quality)" },
+    { value: "q8_0", label: "q8_0 (~50% memory)" },
+    { value: "q4_0", label: "q4_0 (~75% memory)" },
   ];
 
   const toolCallingOptions = [
-    { value: "auto", label: "auto (según el modelo)" },
-    { value: "native", label: "nativo (tools + jinja)" },
-    { value: "grammar", label: "GBNF (gramática, universal)" },
+    { value: "auto", label: "auto (based on model)" },
+    { value: "native", label: "native (tools + jinja)" },
+    { value: "grammar", label: "GBNF (grammar, universal)" },
   ];
 
   let {
@@ -26,9 +26,9 @@
   let loadingGpus = $state(true);
 
   let deviceOptions = $derived([
-    { value: "auto", label: gpus.length ? "auto (recomendado)" : "auto (dejar que llama-server elija)" },
-    { value: "cpu", label: "cpu (solo CPU)" },
-    ...gpus.map((g) => ({ value: g.id, label: `${g.id}: ${g.name} (${g.free_mb} MB libres)` })),
+    { value: "auto", label: gpus.length ? "auto (recommended)" : "auto (let llama-server choose)" },
+    { value: "cpu", label: "cpu (CPU only)" },
+    ...gpus.map((g) => ({ value: g.id, label: `${g.id}: ${g.name} (${g.free_mb} MB free)` })),
   ]);
 
   $effect(() => {
@@ -60,11 +60,11 @@
 {#if s}
   <div class="col" style="flex:1;overflow:hidden">
     <div class="row between" style="padding:8px 10px;border-bottom:1px solid var(--border)">
-      <span class="small muted">Ajustes de inferencia</span>
+      <span class="small muted">Inference Settings</span>
       <div class="row" style="gap:6px">
-        <button class="ghost small-btn" onclick={reset}>Restaurar</button>
+        <button class="ghost small-btn" onclick={reset}>Restore</button>
         <button class="primary small-btn" onclick={save} disabled={saving}>
-          {saving ? "Guardando..." : savedAt ? "Guardado ✓" : "Guardar"}
+          {saving ? "Saving..." : savedAt ? "Saved ✓" : "Save"}
         </button>
       </div>
     </div>
@@ -101,7 +101,7 @@
           <input type="number" min="1" max="64" bind:value={s.threads} />
         </div>
         <div class="field">
-          <label>GPU layers <span class="dim">(0 = CPU, 99 = todo en GPU)</span></label>
+          <label>GPU layers <span class="dim">(0 = CPU, 99 = all on GPU)</span></label>
           <input type="number" min="0" max="999" bind:value={s.n_gpu_layers} disabled={s.gpu_layers_auto} />
         </div>
       </div>
@@ -109,34 +109,34 @@
       <div class="field" style="margin-top:4px">
         <label class="checkbox-label">
           <input type="checkbox" bind:checked={s.gpu_layers_auto} class="checkbox" />
-          <span>GPU layers automático <span class="dim">(-fit: llama.cpp reparte capas según memoria libre; recomendado)</span></span>
+          <span>Automatic GPU layers <span class="dim">(-fit: llama.cpp distributes layers based on free memory; recommended)</span></span>
         </label>
       </div>
 
       <div class="field" style="margin-top:4px">
-        <label>Dispositivo GPU</label>
+        <label>GPU device</label>
         {#if loadingGpus}
-          <div class="dim small">Detectando GPUs...</div>
+          <div class="dim small">Detecting GPUs...</div>
         {:else if gpus.length === 0}
           <Select bind:value={s.device} options={deviceOptions} />
         {:else}
           <Select bind:value={s.device} options={deviceOptions} />
           <div class="dim small" style="margin-top:4px">
             {#each gpus as g (g.id)}
-              <div>{g.name} — {g.total_mb} MB total, {g.free_mb} MB libres</div>
+              <div>{g.name} — {g.total_mb} MB total, {g.free_mb} MB free</div>
             {/each}
           </div>
         {/if}
       </div>
 
-      <div class="section-title">Optimización / memoria</div>
+      <div class="section-title">Optimization / Memory</div>
       <div class="grid">
         <div class="field">
-          <label>Caché KV — clave <span class="dim">(menos RAM de contexto)</span></label>
+          <label>KV cache — key <span class="dim">(less context RAM)</span></label>
           <Select bind:value={s.cache_type_k} options={cacheOptions} />
         </div>
         <div class="field">
-          <label>Caché KV — valor</label>
+          <label>KV cache — value</label>
           <Select bind:value={s.cache_type_v} options={cacheOptions} />
         </div>
         <div class="field">
@@ -148,43 +148,43 @@
       <div class="field" style="margin-top:4px">
         <label class="checkbox-label">
           <input type="checkbox" bind:checked={s.use_mmap} class="checkbox" />
-          <span>Usar mmap <span class="dim">(carga bajo demanda; desactívalo para forzar todo a RAM)</span></span>
+          <span>Use mmap <span class="dim">(load on demand; disable to force everything into RAM)</span></span>
         </label>
       </div>
       <div class="field">
         <label class="checkbox-label">
           <input type="checkbox" bind:checked={s.use_mlock} class="checkbox" />
-          <span>mlock <span class="dim">(fija el modelo en RAM, evita swap; requiere RAM suficiente)</span></span>
+          <span>mlock <span class="dim">(locks the model in RAM, avoids swap; requires enough RAM)</span></span>
         </label>
       </div>
 
       <div class="field" style="margin-top:8px">
         <label class="checkbox-label">
           <input type="checkbox" bind:checked={s.enable_thinking} class="checkbox" />
-          <span>Modo thinking <span class="dim">(razonamiento visible, modelos Qwen/Phi)</span></span>
+          <span>Thinking mode <span class="dim">(visible reasoning, Qwen/Phi models)</span></span>
         </label>
       </div>
 
-      <div class="section-title">Agente</div>
+      <div class="section-title">Agent</div>
       <div class="field">
-        <label>Tool-calling <span class="dim">(cómo invoca herramientas el agente)</span></label>
+        <label>Tool calling <span class="dim">(how the agent invokes tools)</span></label>
         <Select bind:value={s.tool_calling} options={toolCallingOptions} />
         <div class="dim small" style="margin-top:4px">
-          <strong>auto</strong>: nativo para modelos capaces (Coder/Qwen/Llama 3.1+…), GBNF para
-          los chicos. <strong>GBNF</strong> fuerza la gramática (más robusto en modelos débiles).
-          Se aplica al <strong>recargar el modelo</strong>.
+          <strong>auto</strong>: native for capable models (Coder/Qwen/Llama 3.1+...), GBNF for
+          smaller ones. <strong>GBNF</strong> forces grammar mode, which is more robust on weaker
+          models. Applies after <strong>reloading the model</strong>.
         </div>
       </div>
 
       <div class="note small muted">
-        GPU layers, context size, threads, caché KV, batch, mmap y mlock se aplican al
-        <strong>recargar el modelo</strong>. Temperature, top_p y system prompt aplican al
-        siguiente mensaje.
+        GPU layers, context size, threads, KV cache, batch, mmap, and mlock apply after
+        <strong>reloading the model</strong>. Temperature, top_p, and system prompt apply to the
+        next message.
         <br /><br />
-        Para <strong>modelos más grandes</strong> en la misma máquina: subí context size y poné
-        la caché KV en <strong>q8_0</strong> (mitad de memoria de contexto, calidad casi intacta).
-        Si el modelo no entra en VRAM, bajá GPU layers; si te sobra RAM y querés evitar swap,
-        activá mlock.
+        For <strong>larger models</strong> on the same machine: raise context size and set the
+        KV cache to <strong>q8_0</strong> (about half the context memory, quality almost intact).
+        If the model does not fit in VRAM, lower GPU layers; if you have spare RAM and want to
+        avoid swap, enable mlock.
       </div>
     </div>
   </div>

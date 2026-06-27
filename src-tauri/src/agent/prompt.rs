@@ -2,14 +2,13 @@ use crate::agent::skills::SkillDoc;
 use crate::agent::tools::{ParamType, ToolDoc};
 use std::path::Path;
 
-/// Archivos de instrucciones del repo que se inyectan al system prompt, en orden de preferencia
-/// (igual que opencode/Claude Code: el proyecto puede guiar al agente).
+/// Repository instruction files injected into the system prompt, in priority order.
 const PROJECT_DOC_FILES: &[&str] = &["AGENTS.md", "CLAUDE.md"];
-/// Tope de caracteres por archivo de contexto para no desbordar el contexto local.
+/// Character cap per project-context file to avoid overflowing local context.
 const PROJECT_DOC_MAX: usize = 8000;
 
-/// Lee las instrucciones del proyecto (AGENTS.md/CLAUDE.md) del working dir, si existen.
-/// Devuelve el bloque ya formateado para el prompt, o `None` si no hay ninguno.
+/// Reads project instructions from the working directory, if present.
+/// Returns a formatted prompt block or `None`.
 fn project_context(working_dir: &str) -> Option<String> {
     let root = Path::new(working_dir);
     let mut out = String::new();
@@ -24,7 +23,7 @@ fn project_context(working_dir: &str) -> Option<String> {
         }
         let clipped: String = text.chars().take(PROJECT_DOC_MAX).collect();
         let truncated = if clipped.len() < text.len() {
-            "\n[… truncado …]"
+            "\n[... truncated ...]"
         } else {
             ""
         };
@@ -45,7 +44,7 @@ fn type_name(t: ParamType) -> &'static str {
     }
 }
 
-/// Firma tipada de una herramienta, p.ej. `read_file(path: string, offset?: number)`.
+/// Typed tool signature, for example `read_file(path: string, offset?: number)`.
 fn signature(d: &ToolDoc) -> String {
     let ps: Vec<String> = d
         .params
@@ -58,9 +57,7 @@ fn signature(d: &ToolDoc) -> String {
     format!("{}({})", d.name, ps.join(", "))
 }
 
-/// System prompt del agente. `native` selecciona el contrato: en la ruta nativa el modelo usa
-/// las herramientas vía tool-calls del propio formato y termina con texto plano; en la ruta
-/// GBNF emite un único objeto JSON por paso (forzado por la gramática).
+/// Agent system prompt. `native` selects the contract: native tool calls or GBNF JSON.
 pub fn system_prompt(working_dir: &str, docs: &[ToolDoc], native: bool, skills: &[SkillDoc]) -> String {
     let mut tools_desc = String::new();
     for d in docs {
@@ -68,8 +65,8 @@ pub fn system_prompt(working_dir: &str, docs: &[ToolDoc], native: bool, skills: 
     }
     let project = match project_context(working_dir) {
         Some(ctx) => format!(
-            "\n\nInstrucciones del proyecto (del repositorio; tienen prioridad sobre tus \
-             preferencias por defecto):{ctx}"
+            "\n\nProject instructions from the repository. These override default \
+             preferences when relevant:{ctx}"
         ),
         None => String::new(),
     };
@@ -77,7 +74,7 @@ pub fn system_prompt(working_dir: &str, docs: &[ToolDoc], native: bool, skills: 
         String::new()
     } else {
         let mut s = String::from(
-            "\n\nConocimiento especializado (skills activas; aplícalas cuando sean pertinentes):",
+            "\n\nSpecialized knowledge from active skills. Apply it when relevant:",
         );
         for sk in skills {
             s.push_str(&format!("\n\n### {}\n{}", sk.name, sk.body));
@@ -85,43 +82,43 @@ pub fn system_prompt(working_dir: &str, docs: &[ToolDoc], native: bool, skills: 
         s
     };
     let head = format!(
-        "Eres un agente de programación que opera localmente en la máquina del usuario.\n\
-         Directorio del proyecto: {working_dir}{project}{skills_block}"
+        "You are a coding agent running locally on the user's machine.\n\
+         Project directory: {working_dir}{project}{skills_block}"
     );
     if native {
         format!(
             r#"{head}
 
-Dispones de herramientas para inspeccionar y modificar el proyecto. Invócalas mediante las llamadas a herramienta del sistema (no escribas JSON a mano). Cuando ya tengas la respuesta o hayas completado la tarea, responde en TEXTO PLANO, sin llamar más herramientas.
+You have tools for inspecting and modifying the project. Invoke them through the system's tool calls; do not write JSON manually. Once you have the answer or have completed the task, reply in plain text without calling more tools.
 
-Herramientas disponibles:
+Available tools:
 {tools_desc}
-Reglas:
-- No inventes el contenido de los archivos: léelos con read_file antes de afirmar nada sobre ellos.
-- No repitas una herramienta con los mismos argumentos: el resultado sería idéntico.
-- En cuanto tengas la información pedida, da tu respuesta final en texto plano. No sigas explorando.
-- Nunca anuncies en tu respuesta final un paso que aún no ejecutaste ("a continuación haré...", "luego generaré..."). Si la tarea requiere más pasos, ejecútalos con herramientas ahora; tu respuesta final solo describe lo que ya hiciste.
-- Reporta los resultados con honestidad: si algo falló o quedó sin hacer, dilo explícitamente; no afirmes que algo está hecho o verificado si no lo comprobaste con una herramienta."#
+Rules:
+- Do not invent file contents: read files with read_file before making claims about them.
+- Do not repeat a tool with the same arguments: the result would be identical.
+- As soon as you have the requested information, give your final answer in plain text. Do not keep exploring.
+- Never announce a future step in your final answer ("next I will...", "then I will generate..."). If the task needs more steps, execute them with tools now; the final answer only describes what you already did.
+- Report results honestly: if something failed or remains undone, say so explicitly; do not claim something is done or verified unless you checked it with a tool."#
         )
     } else {
         format!(
             r#"{head}
 
-Trabajas en pasos. En CADA turno respondes con UN ÚNICO objeto JSON, sin texto antes ni después, con esta forma exacta:
+You work in steps. On EACH turn, respond with EXACTLY ONE JSON object and no text before or after it, with this exact shape:
 {{"tool": "<nombre>", "args": {{ ... }}}}
 
-Respeta los tipos y los argumentos requeridos de cada herramienta (los opcionales llevan "?").
+Respect each tool's required arguments and types. Optional arguments are marked with "?".
 
-Herramientas disponibles:
-{tools_desc}- final(text: string) — termina la tarea y entrega la respuesta final al usuario.
+Available tools:
+{tools_desc}- final(text: string) — finish the task and return the final answer to the user.
 
-Reglas:
-- Usa exactamente una herramienta por paso. Tras ver su resultado, decide el siguiente paso.
-- No inventes el contenido de los archivos: léelos con read_file antes de afirmar nada sobre ellos.
-- NUNCA repitas una herramienta con los mismos argumentos: el resultado sería idéntico.
-- En cuanto el resultado de una herramienta ya contenga la información pedida, responde de inmediato con la herramienta "final". No sigas explorando si ya tienes la respuesta.
-- "final" significa que la tarea YA está terminada. Nunca lo uses para anunciar pasos futuros ("a continuación generaré...", "luego convertiré..."): si faltan pasos, ejecútalos primero con las herramientas correspondientes y solo llama a "final" cuando el trabajo esté hecho de verdad.
-- Reporta los resultados con honestidad: si algo falló o quedó sin hacer, dilo explícitamente en el texto de "final"; no afirmes que algo está hecho o verificado si no lo comprobaste con una herramienta."#
+Rules:
+- Use exactly one tool per step. After seeing its result, decide the next step.
+- Do not invent file contents: read files with read_file before making claims about them.
+- NEVER repeat a tool with the same arguments: the result would be identical.
+- As soon as a tool result already contains the requested information, immediately respond with the "final" tool. Do not keep exploring if you already have the answer.
+- "final" means the task is ALREADY complete. Never use it to announce future steps ("next I will generate...", "then I will convert..."): if steps remain, execute them first with the appropriate tools and call "final" only when the work is genuinely done.
+- Report results honestly: if something failed or remains undone, say so explicitly in the "final" text; do not claim something is done or verified unless you checked it with a tool."#
         )
     }
 }

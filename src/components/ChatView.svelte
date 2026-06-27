@@ -70,7 +70,7 @@
     const text = input.trim();
     if (!text || sending) return;
     if (!status.loaded) {
-      alert("Carga un modelo primero desde la pestaña 'Modelos'");
+      alert("Load a model first from the Models tab");
       return;
     }
     input = "";
@@ -121,11 +121,11 @@
         {#if status.loaded}
           <span class="tag accent">{status.model_name}</span>
         {:else}
-          <span class="tag warn">sin modelo</span>
+          <span class="tag warn">no model</span>
         {/if}
       </div>
       <button class="ghost small-btn" onclick={clearChat} disabled={sending}>
-        Limpiar
+        Clear
       </button>
     </div>
   {/if}
@@ -137,12 +137,12 @@
           <span class="orb-halo"></span>
           <Icon name="chat" size="xxl" />
         </div>
-        <div class="empty-title">Comienza una conversación</div>
+        <div class="empty-title">Start a Conversation</div>
         <div class="empty-sub">
           {#if status.loaded}
-            Escribe tu primer mensaje para <strong>{status.model_name}</strong>.
+            Write your first message to <strong>{status.model_name}</strong>.
           {:else}
-            Selecciona o carga un modelo y escribe tu primer mensaje.
+            Select or load a model and write your first message.
           {/if}
         </div>
       </div>
@@ -156,7 +156,7 @@
   <div class="composer-wrap">
     <div class="composer" class:disabled={!status.loaded}>
       <textarea
-        placeholder={status.loaded ? "Escribe tu mensaje…" : "Carga un modelo para empezar a chatear"}
+        placeholder={status.loaded ? "Write your message..." : "Load a model to start chatting"}
         bind:value={input}
         onkeydown={onKeydown}
         rows="1"
@@ -164,26 +164,26 @@
       ></textarea>
       <div class="composer-bar">
         <div class="tools">
-          <button class="icon-btn" title="Adjuntar contexto"><Icon name="plus" size="sm" /></button>
-          <button class="icon-btn" title="Parámetros"><Icon name="sliders" size="sm" /></button>
-          <button class="icon-btn" title="Adjuntar archivo"><Icon name="paperclip" size="sm" /></button>
+          <button class="icon-btn" title="Attach context"><Icon name="plus" size="sm" /></button>
+          <button class="icon-btn" title="Parameters"><Icon name="sliders" size="sm" /></button>
+          <button class="icon-btn" title="Attach file"><Icon name="paperclip" size="sm" /></button>
         </div>
         {#if sending}
-          <button class="send stop" onclick={stop} title="Detener"><Icon name="stop" size="sm" /></button>
+          <button class="send stop" onclick={stop} title="Stop"><Icon name="stop" size="sm" /></button>
         {:else}
           <button
             class="send"
             onclick={send}
             disabled={!status.loaded || !input.trim()}
-            title="Enviar">
+            title="Send">
             <Icon name="send" size="sm" />
           </button>
         {/if}
       </div>
     </div>
     <div class="hint">
-      <span><span class="kbd">↵</span> Enter para enviar</span>
-      <span><span class="kbd">⇧ ↵</span> Enter para nueva línea</span>
+      <span><span class="kbd">↵</span> Enter to send</span>
+      <span><span class="kbd">⇧ ↵</span> Enter for new line</span>
     </div>
   </div>
 </div>

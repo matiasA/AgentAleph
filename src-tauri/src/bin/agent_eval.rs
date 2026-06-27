@@ -1,13 +1,13 @@
-//! Harness de evaluación del harness de agente contra un modelo GGUF real.
+//! Evaluation harness for the agent harness against a real GGUF model.
 //!
-//! Levanta `llama-server` (CPU/GPU), construye un proyecto-fixture pequeño y corre
-//! un set de ~50 tareas variadas contra el MISMO `run_inner` que usa la app Tauri
-//! (vía `agent_aleph_lib::agent::run_turn`), con permisos auto-aprobados. Probamos
-//! ambas rutas de tool-calling (`grammar`/GBNF y `native`/--jinja) y logueamos por
-//! tarea: pasos, llamadas a herramienta, reason final y veredicto del checker.
+//! Starts `llama-server` (CPU/GPU), builds a small fixture project, and runs a set
+//! of ~50 varied tasks against the SAME `run_inner` used by the Tauri app
+//! (through `agent_aleph_lib::agent::run_turn`), with auto-approved permissions.
+//! We test both tool-calling routes (`grammar`/GBNF and `native`/--jinja) and log
+//! per task: steps, tool calls, final reason, and checker verdict.
 //!
-//! Uso:
-//!   agent_eval --model /ruta/Qwen3.5-4B-Q4_K_M.gguf [--routes grammar,native] \
+//! Usage:
+//!   agent_eval --model /path/Qwen3.5-4B-Q4_K_M.gguf [--routes grammar,native] \
 //!             [--out ./eval-out] [--context-size 8192] [--max-tokens 1024]
 
 use agent_aleph_lib::agent::{run_turn, LoopSink};
@@ -24,7 +24,7 @@ use tokio::process::{Child, Command};
 use tokio_util::sync::CancellationToken;
 
 // ----------------------------------------------------------------------
-// Parámetros de línea de comandos (parser minimalista, sin deps extra).
+// Command-line parameters (minimal parser, no extra deps).
 // ----------------------------------------------------------------------
 
 struct Cli {
@@ -35,9 +35,9 @@ struct Cli {
     max_tokens: u32,
     threads: u32,
     temperature: f32,
-    /// Limita a las primeras N tareas por ruta (0 = todas). Smoke test.
+    /// Limit to the first N tasks per route (0 = all). Smoke test.
     limit: usize,
-    /// Filtra tareas por id (separados por coma). Vacío = todas.
+    /// Filter tasks by id (comma-separated). Empty = all.
     only: Vec<String>,
 }
 
@@ -96,13 +96,13 @@ fn parse_cli() -> Cli {
                 i += 2;
             }
             _ => {
-                eprintln!("arg desconocido: {a}");
+                eprintln!("unknown arg: {a}");
                 i += 1;
             }
         }
     }
     let model = model.unwrap_or_else(|| {
-        eprintln!("Uso: agent_eval --model /ruta/modelo.gguf [--routes grammar,native] [--out dir]");
+        eprintln!("Usage: agent_eval --model /path/model.gguf [--routes grammar,native] [--out dir]");
         std::process::exit(2);
     });
     Cli {
@@ -119,7 +119,7 @@ fn parse_cli() -> Cli {
 }
 
 // ----------------------------------------------------------------------
-// Fixture: proyecto-mini reproducible. Se crea una vez y se copia por tarea.
+// Fixture: reproducible mini project. Created once and copied per task.
 // ----------------------------------------------------------------------
 
 fn write(path: &Path, content: &str) {
@@ -134,7 +134,7 @@ fn build_fixture(root: &Path) {
         r#"{
   "name": "fixture-app",
   "version": "1.4.2",
-  "description": "Proyecto de ejemplo para evaluar al agente",
+  "description": "Sample project for evaluating the agent",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
@@ -150,29 +150,29 @@ fn build_fixture(root: &Path) {
         &root.join("README.md"),
         r#"# Fixture App
 
-Proyecto de ejemplo para evaluar al agente.
+Sample project for evaluating the agent.
 
 ## Scripts
-- `npm start`: arranca la app.
-- `npm test`: corre los tests de `math`.
+- `npm start`: starts the app.
+- `npm test`: runs the `math` tests.
 
-## Estructura
-- `src/index.js`: punto de entrada.
-- `src/math.js`: operaciones matemáticas.
-- `src/utils.js`: utilidades varias.
-- `tests/math.test.js`: tests de math.
+## Structure
+- `src/index.js`: entry point.
+- `src/math.js`: math operations.
+- `src/utils.js`: assorted utilities.
+- `tests/math.test.js`: math tests.
 
-## Bug conocido
-`add(a, b)` en `src/math.js` resta en vez de sumar. Hay que arreglarlo.
+## Known bug
+`add(a, b)` in `src/math.js` subtracts instead of adding. It needs to be fixed.
 
-TODO: añadir soporte para multiplicación y división.
-TODO: validar entradas negativas.
+TODO: add multiplication and division support.
+TODO: validate negative inputs.
 "#,
     );
-    // AGENTS.md (contexto de proyecto inyectado al system prompt)
+    // AGENTS.md (project context injected into the system prompt)
     write(
         &root.join("AGENTS.md"),
-        "# Fixture — AGENTS.md\n\nEl bug a arreglar está en `src/math.js`: `add` hace una resta.\n",
+        "# Fixture - AGENTS.md\n\nThe bug to fix is in `src/math.js`: `add` subtracts.\n",
     );
     // src/index.js
     write(
@@ -181,12 +181,12 @@ TODO: validar entradas negativas.
 console.log("2 + 3 =", add(2, 3));
 "#,
     );
-    // src/math.js con el bug
+    // src/math.js with the bug
     write(
         &root.join("src/math.js"),
-        r#"// Operaciones matematicas basicas.
+        r#"// Basic math operations.
 function add(a, b) {
-  return a - b; // BUG: deberia sumar
+  return a - b; // BUG: should add
 }
 function sub(a, b) {
   return a - b;
@@ -222,35 +222,35 @@ process.exit(fail ? 1 : 0);
     // docs/notes.md
     write(
         &root.join("docs/notes.md"),
-        "# Notas internas\n\nPrioridad actual: arreglar `add`.\nA revisar: soporte de fracciones.\n",
+        "# Internal notes\n\nCurrent priority: fix `add`.\nTo review: fraction support.\n",
     );
-    // config.json (Vals para ejercitar lectura con offset/limit)
+    // data.txt (values for offset/limit reading)
     let big: String = (0..256)
-        .map(|i| format!("línea {i}: valor_{i} = {i} * 2 = {}", i * 2))
+        .map(|i| format!("line {i}: value_{i} = {i} * 2 = {}", i * 2))
         .collect::<Vec<_>>()
         .join("\n");
     write(&root.join("data.txt"), &format!("{big}\n"));
-    // archivo vacío (para probar read_file de archivo vacío)
+    // empty file (to test read_file on empty files)
     write(&root.join("empty.txt"), "");
-    // un .ts para el glob *.ts (no debe matchear en fixture, prueba negativa de glob)
+    // a .ts file for the *.ts glob
     write(&root.join("src/types.d.ts"), "export type ID = string;\n");
-    // //.binario simulado para grep (debe saltarse)
+    // simulated binary file for grep (should be skipped)
     write(&root.join("blob.bin"), "\x00\x01\x02\x03BINARYNOLEER");
 }
 
 // ----------------------------------------------------------------------
-// Tareas y checkers.
+// Tasks and checkers.
 // ----------------------------------------------------------------------
 
 #[derive(Clone)]
 struct Task {
     id: &'static str,
     prompt: &'static str,
-    /// Herramientas que esperamos ver usadas (solo para logging/diagnóstico, no estricto).
+    /// Tools we expect to see used (only for logging/diagnostics, not strict).
     #[allow(dead_code)]
     expect_tools: &'static [&'static str],
-    /// Checker: recibe (working_dir, texto_final, llamadas) y devuelve None=pass,
-    /// Some(motivo)=fail. Las llamadas incluyen los args parseados y el resultado.
+    /// Checker: receives (working_dir, final_text, calls) and returns None=pass,
+    /// Some(reason)=fail. Calls include parsed args and result.
     check: fn(&Path, &str, &[ToolRecord]) -> Option<String>,
 }
 
@@ -277,18 +277,18 @@ struct TaskRecord {
     fail_reason: Option<String>,
 }
 
-// Helpers para checkers.
+// Checker helpers.
 fn read(p: &Path) -> String {
     fs::read_to_string(p).unwrap_or_default()
 }
-fn contains_ins(hay: &str, needle: &str) -> bool {
-    hay.to_lowercase().contains(&needle.to_lowercase())
+fn contains_ins(haystack: &str, needle: &str) -> bool {
+    haystack.to_lowercase().contains(&needle.to_lowercase())
 }
-// ¿El agente llamó a una herramienta concreta al menos una vez (sin error)?
+// Did the agent call a concrete tool at least once (without error)?
 fn called(records: &[ToolRecord], tool: &str) -> bool {
     records.iter().any(|r| r.tool == tool && !r.is_error)
 }
-// ¿El texto final menciona `needle` (case-insensitive)?
+// Does the final text mention `needle` (case-insensitive)?
 fn text_has(text: &str, needle: &str) -> bool {
     contains_ins(text, needle)
 }

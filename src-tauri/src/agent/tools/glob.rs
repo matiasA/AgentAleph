@@ -12,7 +12,7 @@ impl Tool for Glob {
     }
 
     fn description(&self) -> &'static str {
-        "Busca archivos por nombre con comodines * y ? (p.ej. \"*.rs\" o \"src/*.svelte\")."
+        "Find files by name with * and ? wildcards, for example \"*.rs\" or \"src/*.svelte\"."
     }
 
     fn risk(&self) -> Risk {
@@ -27,7 +27,7 @@ impl Tool for Glob {
         let pattern = args
             .get("pattern")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| AppError::Other("glob requiere el argumento 'pattern'".into()))?;
+            .ok_or_else(|| AppError::Other("glob requires the 'pattern' argument".into()))?;
 
         let mut files = Vec::new();
         walk_files(&ctx.working_dir, &ctx.working_dir, 12, &mut files);
@@ -41,15 +41,15 @@ impl Tool for Glob {
         matches.truncate(200);
 
         if matches.is_empty() {
-            return Ok(format!("[sin coincidencias para '{pattern}']"));
+            return Ok(format!("[no matches for '{pattern}']"));
         }
         Ok(matches.join("\n"))
     }
 }
 
-/// Coincidencia de glob con `*` (cualquier secuencia, incluida `/`) y `?` (un carácter).
+/// Glob matching with `*` and `?`.
 fn glob_match(pattern: &str, text: &str) -> bool {
-    // Si el patrón no tiene separador, comparamos solo contra el nombre de archivo.
+    // If the pattern has no separator, compare against the filename only.
     let target = if pattern.contains('/') {
         text
     } else {

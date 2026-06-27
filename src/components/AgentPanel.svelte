@@ -20,20 +20,20 @@
   let skills = $state<Skill[]>([]);
   let busy = $state(false);
 
-  // Formulario de creación de skill.
+  // Skill creation form.
   let creating = $state(false);
   let nName = $state("");
   let nDesc = $state("");
   let nBody = $state("");
 
-  // Agregado de texto al contexto.
+  // Text attached to context.
   let addingText = $state(false);
   let textVal = $state("");
 
-  // Conexiones: maqueta deshabilitada (la app es 100% local; integración futura).
+  // Connections: disabled placeholder. The app is 100% local; integrations are future work.
   const connections: { name: string; desc: string; logo: "github" | "google" }[] = [
-    { name: "GitHub", desc: "Repos, issues y PRs", logo: "github" },
-    { name: "Google", desc: "Drive, Calendar, búsqueda", logo: "google" },
+    { name: "GitHub", desc: "Repos, issues, and PRs", logo: "github" },
+    { name: "Google", desc: "Drive, Calendar, search", logo: "google" },
   ];
 
   onMount(refreshSkills);
@@ -64,7 +64,7 @@
       creating = false;
       await refreshSkills();
     } catch (e) {
-      alert("No se pudo crear la skill: " + e);
+      alert("Could not create skill: " + e);
     } finally {
       busy = false;
     }
@@ -79,23 +79,23 @@
       await api.importSkill(dir);
       await refreshSkills();
     } catch (e) {
-      alert("No se pudo importar: " + e);
+      alert("Could not import: " + e);
     } finally {
       busy = false;
     }
   }
 
   async function deleteSkill(s: Skill) {
-    if (!confirm(`¿Eliminar la skill "${s.name}"?`)) return;
+    if (!confirm(`Delete skill "${s.name}"?`)) return;
     try {
       await api.deleteSkill(s.slug);
       await refreshSkills();
     } catch (e) {
-      alert("No se pudo eliminar: " + e);
+      alert("Could not delete: " + e);
     }
   }
 
-  // ---------- Contexto ----------
+  // ---------- Context ----------
 
   async function addFiles() {
     const sel = await open({ multiple: true });
@@ -122,7 +122,7 @@
     addContextItem({
       id: crypto.randomUUID(),
       kind: "text",
-      label: "Texto",
+      label: "Text",
       content: v,
     });
     textVal = "";
@@ -141,21 +141,21 @@
     {#if skillsOpen}
       <div class="row-actions">
         <button class="mini-btn" onclick={() => (creating = !creating)}>
-          <Icon name="plus" size="sm" /> Crear
+          <Icon name="plus" size="sm" /> Create
         </button>
         <button class="mini-btn" onclick={importSkill} disabled={busy}>
-          <Icon name="folder-plus" size="sm" /> Importar
+          <Icon name="folder-plus" size="sm" /> Import
         </button>
       </div>
 
       {#if creating}
         <div class="create-form">
-          <input class="inp" placeholder="Nombre" bind:value={nName} />
-          <input class="inp" placeholder="Descripción" bind:value={nDesc} />
-          <textarea class="inp" rows="4" placeholder="Instrucciones (cuerpo del SKILL.md)" bind:value={nBody}></textarea>
+          <input class="inp" placeholder="Name" bind:value={nName} />
+          <input class="inp" placeholder="Description" bind:value={nDesc} />
+          <textarea class="inp" rows="4" placeholder="Instructions (SKILL.md body)" bind:value={nBody}></textarea>
           <div class="row-actions">
-            <button class="mini-btn primary" onclick={createSkill} disabled={busy || !nName.trim()}>Guardar</button>
-            <button class="mini-btn" onclick={() => (creating = false)}>Cancelar</button>
+            <button class="mini-btn primary" onclick={createSkill} disabled={busy || !nName.trim()}>Save</button>
+            <button class="mini-btn" onclick={() => (creating = false)}>Cancel</button>
           </div>
         </div>
       {/if}
@@ -166,32 +166,32 @@
             <span class="skill-ico"><Icon name="box" /></span>
             <span class="skill-text">
               <span class="skill-title">{s.name}</span>
-              <span class="skill-desc">{s.description || "Sin descripción"}</span>
+              <span class="skill-desc">{s.description || "No description"}</span>
             </span>
             <button
               class="toggle"
               class:on={s.enabled}
-              title={s.enabled ? "Activa" : "Inactiva"}
+              title={s.enabled ? "Active" : "Inactive"}
               onclick={() => toggleSkill(s)}>
               <span class="knob"></span>
             </button>
-            <button class="icon-btn" title="Eliminar" onclick={() => deleteSkill(s)}>
+            <button class="icon-btn" title="Delete" onclick={() => deleteSkill(s)}>
               <Icon name="x" size="sm" />
             </button>
           </div>
         {/each}
         {#if !skills.length}
-          <div class="empty">Sin skills. Creá una o importá una carpeta con un <code>SKILL.md</code>.</div>
+          <div class="empty">No skills yet. Create one or import a folder with a <code>SKILL.md</code>.</div>
         {/if}
       </div>
     {/if}
   </div>
 
-  <!-- Conexiones (placeholder) -->
+  <!-- Connections (placeholder) -->
   <div class="panel-section">
     <button class="section-head" onclick={() => (connOpen = !connOpen)}>
-      <span class="section-label">Conexiones</span>
-      <span class="badge">próximamente</span>
+      <span class="section-label">Connections</span>
+      <span class="badge">coming soon</span>
       <span class="chev" class:open={connOpen}><Icon name="chevron-up" size="sm" /></span>
     </button>
     {#if connOpen}
@@ -203,32 +203,32 @@
               <span class="skill-title">{c.name}</span>
               <span class="skill-desc">{c.desc}</span>
             </span>
-            <span class="soon">próximamente</span>
+            <span class="soon">coming soon</span>
           </div>
         {/each}
       </div>
     {/if}
   </div>
 
-  <!-- Contexto -->
+  <!-- Context -->
   <div class="panel-section grow">
     <button class="section-head" onclick={() => (ctxOpen = !ctxOpen)}>
-      <span class="section-label">Contexto</span>
+      <span class="section-label">Context</span>
       <span class="chev" class:open={ctxOpen}><Icon name="chevron-up" size="sm" /></span>
     </button>
 
     {#if ctxOpen}
       <div class="row-actions">
-        <button class="mini-btn" onclick={addFiles}><Icon name="paperclip" size="sm" /> Archivo</button>
-        <button class="mini-btn" onclick={() => (addingText = !addingText)}><Icon name="file-text" size="sm" /> Texto</button>
+        <button class="mini-btn" onclick={addFiles}><Icon name="paperclip" size="sm" /> File</button>
+        <button class="mini-btn" onclick={() => (addingText = !addingText)}><Icon name="file-text" size="sm" /> Text</button>
       </div>
 
       {#if addingText}
         <div class="create-form">
-          <textarea class="inp" rows="3" placeholder="Pega texto para adjuntar al contexto" bind:value={textVal}></textarea>
+          <textarea class="inp" rows="3" placeholder="Paste text to attach to context" bind:value={textVal}></textarea>
           <div class="row-actions">
-            <button class="mini-btn primary" onclick={addText} disabled={!textVal.trim()}>Agregar</button>
-            <button class="mini-btn" onclick={() => (addingText = false)}>Cancelar</button>
+            <button class="mini-btn primary" onclick={addText} disabled={!textVal.trim()}>Add</button>
+            <button class="mini-btn" onclick={() => (addingText = false)}>Cancel</button>
           </div>
         </div>
       {/if}
@@ -241,13 +241,13 @@
               <span class="skill-title">{it.label}</span>
               <span class="skill-desc">{it.content.slice(0, 80)}{it.content.length > 80 ? "…" : ""}</span>
             </span>
-            <button class="icon-btn" title="Quitar" onclick={() => removeContextItem(it.id)}>
+            <button class="icon-btn" title="Remove" onclick={() => removeContextItem(it.id)}>
               <Icon name="x" size="sm" />
             </button>
           </div>
         {/each}
         {#if !agentContext.items.length}
-          <div class="empty">Sin contexto agregado. Adjunta archivos o texto para el turno.</div>
+          <div class="empty">No context attached. Add files or text for the next turn.</div>
         {/if}
       </div>
     {/if}

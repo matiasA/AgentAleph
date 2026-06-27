@@ -1,6 +1,6 @@
-// Arnés de mocks SOLO para inspección visual de la UI en un navegador normal (sin Tauri).
-// No se carga nunca dentro de la app Tauri real (ver guarda en main.ts): cuando corre Tauri,
-// `window.__TAURI_INTERNALS__` existe y este módulo no se instala.
+// Mock harness ONLY for visual UI inspection in a normal browser without Tauri.
+// It never loads inside the real Tauri app: when Tauri runs, `window.__TAURI_INTERNALS__`
+// exists and this module is not installed.
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import type { Settings, StoredSession } from "./types";
 
@@ -25,18 +25,17 @@ const settings: Settings = {
   tool_calling: "auto",
 };
 
-// Sesión nativa de ejemplo: ejercita el branch de tool_calls del asistente + rol `tool`
-// en `AgentView.reconstruct`.
+// Example native session: exercises assistant tool_calls + tool role in AgentView.reconstruct.
 const nativeSession: StoredSession = {
   id: "demo-native",
-  title: "Demo nativa (mock)",
+  title: "Native demo (mock)",
   working_dir: "/proj",
   mode: "build",
   created: "2026-06-24T00:00:00Z",
   updated: "2026-06-24T00:00:00Z",
   messages: [
-    { role: "system", content: "Eres un agente de programación." },
-    { role: "user", content: "¿Qué dice la primera línea del README.md?" },
+    { role: "system", content: "You are a coding agent." },
+    { role: "user", content: "What does the first line of README.md say?" },
     {
       role: "assistant",
       content: "",
@@ -46,18 +45,18 @@ const nativeSession: StoredSession = {
       role: "tool",
       tool_name: "read_file",
       tool_call_id: "call_0",
-      content: "# Agent Aleph\nUn agente de codificación 100% local.",
+      content: "# Agent Aleph\nA 100% local AI coding agent.",
     },
     {
       role: "assistant",
-      content: "La primera línea del README.md es: «# Agent Aleph».",
+      content: "The first line of README.md is: \"# Agent Aleph\".",
     },
   ],
 };
 
 let skills = [
-  { slug: "revisor-rust", name: "Revisor Rust", description: "Checklist y convenciones para revisar código Rust.", enabled: true },
-  { slug: "convenciones-svelte", name: "Convenciones Svelte 5", description: "Runes, $state/$props y patrones del proyecto.", enabled: false },
+  { slug: "rust-reviewer", name: "Rust Reviewer", description: "Checklist and conventions for reviewing Rust code.", enabled: true },
+  { slug: "svelte-conventions", name: "Svelte 5 Conventions", description: "Runes, $state/$props, and project patterns.", enabled: false },
 ];
 
 export function installDevMocks() {
@@ -73,7 +72,7 @@ export function installDevMocks() {
         return { loaded: true, model: "/models/qwen.gguf", model_name: "Qwen3.5-0.8B", port: 8099 };
       case "get_app_info":
         return {
-          version: "0.1.0",
+          version: "0.2.0-beta.5",
           models_dir: "/home/matias/.local/share/agent-aleph/models",
           llama_binary: "/bin/llama-server",
           os: "linux",
@@ -83,7 +82,7 @@ export function installDevMocks() {
         return [];
       case "list_agent_sessions":
         return [
-          { id: "demo-native", title: "Demo nativa (mock)", updated: "2026-06-24T00:00:00Z", working_dir: "/proj" },
+          { id: "demo-native", title: "Native demo (mock)", updated: "2026-06-24T00:00:00Z", working_dir: "/proj" },
         ];
       case "load_agent_session":
         return nativeSession;
@@ -107,7 +106,7 @@ export function installDevMocks() {
       }
       case "create_skill": {
         const a = args as any;
-        const sk = { slug: `nueva-${skills.length}`, name: a.name, description: a.description, enabled: false };
+        const sk = { slug: `new-${skills.length}`, name: a.name, description: a.description, enabled: false };
         skills.push(sk);
         return sk;
       }
@@ -117,13 +116,13 @@ export function installDevMocks() {
         return;
       }
       case "read_context_file":
-        return { name: "ejemplo.txt", content: "contenido de ejemplo del archivo adjunto", truncated: false };
+        return { name: "example.txt", content: "example attached file content", truncated: false };
       default:
-        // Plugins de eventos/ventana de Tauri: devolver algo inocuo para no romper listen().
+        // Tauri event/window plugins: return a harmless value so listen() does not break.
         if (cmd.startsWith("plugin:")) return 0;
         return undefined;
     }
   });
   // eslint-disable-next-line no-console
-  console.log("[devMocks] IPC de Tauri mockeado para inspección en navegador");
+  console.log("[devMocks] Tauri IPC mocked for browser inspection");
 }

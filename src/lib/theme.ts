@@ -1,7 +1,7 @@
 /**
- * Tonos seleccionables. La base oscura es siempre la misma; cada tono sólo
- * cambia el acento (ver [data-accent] en app.css). El valor se persiste en
- * localStorage y se aplica al <html> vía data-accent.
+ * Selectable accent tones. The dark base stays the same; each tone only
+ * changes the accent color (see [data-accent] in app.css). The value is
+ * persisted in localStorage and applied to <html> via data-accent.
  */
 
 export type AccentId = "blue" | "indigo" | "emerald" | "amber" | "rose" | "green";
@@ -9,19 +9,19 @@ export type AccentId = "blue" | "indigo" | "emerald" | "amber" | "rose" | "green
 export interface Accent {
   id: AccentId;
   label: string;
-  /** color representativo para el swatch del selector */
+  /** Representative color for the selector swatch. */
   swatch: string;
 }
 
-/** Acentos sobre la base "Anysphere Dark". El azul es el acento original de
- *  Cursor; los demás son tomados de la paleta de sintaxis de Anysphere. */
+/** Accents over the "Anysphere Dark" base. Blue is Cursor's original accent;
+ *  the rest come from the Anysphere syntax palette. */
 export const ACCENTS: Accent[] = [
   { id: "blue", label: "Zed", swatch: "#4d7fff" },
-  { id: "indigo", label: "Lavanda", swatch: "#aaa0fa" },
+  { id: "indigo", label: "Lavender", swatch: "#aaa0fa" },
   { id: "emerald", label: "Teal", swatch: "#83d6c5" },
-  { id: "amber", label: "Ámbar", swatch: "#e3b341" },
-  { id: "rose", label: "Rosa", swatch: "#e394a5" },
-  { id: "green", label: "Verde", swatch: "#a8cc7c" },
+  { id: "amber", label: "Amber", swatch: "#e3b341" },
+  { id: "rose", label: "Rose", swatch: "#e394a5" },
+  { id: "green", label: "Green", swatch: "#a8cc7c" },
 ];
 
 const STORAGE_KEY = "aleph.accent";
@@ -46,7 +46,7 @@ export function applyAccent(id: AccentId) {
   } catch {}
 }
 
-/* ----------------------- Modo (oscuro / claro) ----------------------- */
+/* ----------------------- Mode (dark / light) ----------------------- */
 
 export type Mode = "dark" | "light";
 const MODE_KEY = "aleph.mode";
@@ -67,7 +67,7 @@ export function applyMode(mode: Mode) {
   } catch {}
 }
 
-/** Llamar una vez al arrancar, antes del primer render. */
+/** Call once on startup, before the first render. */
 export function initAccent() {
   applyAccent(getAccent());
   applyMode(getMode());

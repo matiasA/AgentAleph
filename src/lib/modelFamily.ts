@@ -41,5 +41,5 @@ export function detectModelFamily(name: string): ModelFamily {
     if (match.test(name)) return family;
   }
   const letter = name.trim().replace(/^[^a-zA-Z0-9]+/, "").charAt(0).toUpperCase() || "?";
-  return { key: "generic", label: "Modelo", color: DEFAULT_COLOR, initials: letter };
+  return { key: "generic", label: "Model", color: DEFAULT_COLOR, initials: letter };
 }

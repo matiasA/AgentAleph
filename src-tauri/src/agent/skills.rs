@@ -150,7 +150,7 @@ pub fn set_enabled(slug: &str, enabled: bool) -> AppResult<()> {
 /// Crea una skill nueva desde la UI.
 pub fn create(name: &str, description: &str, body: &str) -> AppResult<Skill> {
     if name.trim().is_empty() {
-        return Err(AppError::Other("el nombre de la skill no puede estar vacío".into()));
+        return Err(AppError::Other("skill name cannot be empty".into()));
     }
     let slug = slugify_unique(name);
     let dir = skills_dir().join(&slug);

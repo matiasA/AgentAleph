@@ -83,10 +83,10 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="backdrop" onclick={onClose}></div>
 
-<div class="panel" role="dialog" aria-label="Descargas">
+<div class="panel" role="dialog" aria-label="Downloads">
   <div class="header">
-    <span class="title">Descargas</span>
-    <button class="close-btn" onclick={onClose} aria-label="Cerrar">
+    <span class="title">Downloads</span>
+    <button class="close-btn" onclick={onClose} aria-label="Close">
       <Icon name="x" size="sm" />
     </button>
   </div>
@@ -94,7 +94,7 @@
   <div class="filter-wrap">
     <input
       class="filter-input"
-      placeholder="Filtrar descargas…"
+      placeholder="Filter downloads..."
       bind:value={filterText}
       type="search"
     />
@@ -102,13 +102,13 @@
 
   <div class="body">
     {#if filtered.ongoing.length > 0}
-      <div class="section-label">Activas</div>
+      <div class="section-label">Active</div>
       {#each filtered.ongoing as d (d.id)}
         <div class="dl-item">
           <div class="dl-row">
             <span class="dl-icon"><Icon name="download" size="sm" /></span>
             <span class="dl-name" title={shortName(d)}>{shortName(d)}</span>
-            <button class="icon-mini" title="Cancelar" onclick={() => cancel(d.id)} aria-label="Cancelar descarga">
+            <button class="icon-mini" title="Cancel" onclick={() => cancel(d.id)} aria-label="Cancel download">
               <Icon name="x" size="sm" />
             </button>
           </div>
@@ -116,10 +116,10 @@
             <div class="bar-fill" style="width:{pct(d)}%"></div>
           </div>
           <div class="dl-meta">
-            <span>{humanSize(d.downloaded)} de {humanSize(d.total)}</span>
+            <span>{humanSize(d.downloaded)} of {humanSize(d.total)}</span>
             <span>
               {#if d.speed_bps > 0}
-                {humanSpeed(d.speed_bps)} · {eta(d)} restante
+                {humanSpeed(d.speed_bps)} · {eta(d)} left
               {:else}
                 {statusLabel(d.status)}
               {/if}
@@ -131,8 +131,8 @@
 
     {#if filtered.completed.length > 0}
       <div class="section-label between">
-        <span>Completadas</span>
-        <button class="link-btn" onclick={clearCompleted}>Limpiar</button>
+        <span>Completed</span>
+        <button class="link-btn" onclick={clearCompleted}>Clear</button>
       </div>
       {#each filtered.completed as d (d.id)}
         {@const err = statusError(d.status)}
@@ -158,7 +158,7 @@
     {/if}
 
     {#if filtered.ongoing.length === 0 && filtered.completed.length === 0}
-      <div class="empty">Sin descargas{filterText ? " que coincidan" : ""}</div>
+      <div class="empty">No downloads{filterText ? " match" : ""}</div>
     {/if}
   </div>
 </div>

@@ -14,22 +14,22 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use tokio_util::sync::CancellationToken;
 
-/// Tope duro de pasos por turno para evitar bucles infinitos en modelos débiles.
+/// Hard per-turn step cap to prevent infinite loops in weaker models.
 pub const MAX_STEPS: usize = 25;
 
-/// Mensaje final cuando se aborta por bucle (misma llamada repetida demasiadas veces).
-const LOOP_MSG: &str = "Me quedé repitiendo la misma acción sin avanzar. Detengo la tarea; \
-                        revisa el resultado de los pasos anteriores.";
+/// Final message when aborting because the same call repeated too many times.
+const LOOP_MSG: &str = "I kept repeating the same action without making progress. Stopping the task; \
+                        review the previous step results.";
 
-/// Resultado de procesar una llamada a herramienta dentro de un paso.
+/// Result of processing one tool call inside a step.
 enum CallFlow {
-    /// Llamada atendida (ejecutada, denegada, inválida o con nudge): seguir.
+    /// Call handled: continue.
     Continue,
-    /// Misma llamada repetida demasiadas veces: abortar el turno.
+    /// Same call repeated too many times: abort the turn.
     Loop,
 }
 
-// ---------- Eventos hacia el frontend (formato de cable) ----------
+// ---------- Frontend Events ----------
 
 #[derive(Clone, Serialize)]
 pub struct AgentTokenEvent {
@@ -279,7 +279,7 @@ pub async fn run_agent(
     let port = *state.server_port.lock().await;
     if port == 0 {
         return Err(AppError::Busy(
-            "No hay modelo cargado. Carga uno primero.".into(),
+            "No model loaded. Load one first.".into(),
         ));
     }
     let settings = state.settings.lock().await.clone();
@@ -396,8 +396,8 @@ async fn run_inner(
     let grammar = tool_call_grammar(&docs);
     let tools_schema = registry.openai_tools();
     tracing::info!(
-        "agente: ruta de tool-calling = {} (modelo: {active_model})",
-        if native { "nativa" } else { "GBNF" }
+        "agent: tool-calling route = {} (model: {active_model})",
+        if native { "native" } else { "GBNF" }
     );
 
     // Límite de tokens de la respuesta por paso y presupuesto de contexto para el prompt.
@@ -416,7 +416,7 @@ async fn run_inner(
         .saturating_sub(step_max_tokens)
         .max(512);
 
-    // Cargar la sesión previa (memoria entre turnos) o iniciar una nueva.
+    // Load the previous session or start a new one.
     let prev = if persist { session_store::load(session_id) } else { None };
     let title = prev
         .as_ref()
@@ -436,10 +436,10 @@ async fn run_inner(
     };
     convo.push(AgentMsg::user(user_input));
 
-    // Conteo de llamadas idénticas (herramienta + args) para detectar bucles.
+    // Count identical calls (tool + args) to detect loops.
     let mut seen: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
     let mut outcome: (String, String) = (
-        "Se alcanzó el límite de pasos sin completar la tarea.".into(),
+        "Step limit reached before completing the task.".into(),
         "max_steps".into(),
     );
 
@@ -455,12 +455,12 @@ async fn run_inner(
         match context::maybe_compact(&client, &url, settings, &mut convo, ctx_budget, &cancel)
             .await
         {
-            Ok(true) => tracing::info!("contexto compactado en el paso {step}"),
+            Ok(true) => tracing::info!("context compacted at step {step}"),
             Ok(false) => {}
             Err(AppError::Other(ref m)) if m == "cancelled" => {
                 return Err(AppError::Other("cancelled".into()))
             }
-            Err(e) => tracing::warn!("compactación: {e}"),
+            Err(e) => tracing::warn!("compaction: {e}"),
         }
 
         // `budget_view` queda como red de seguridad barata si aún excede tras compactar.
@@ -527,10 +527,10 @@ async fn run_inner(
                     // lo infla sin valor informativo y puede desbordar el KV-cache en pocos
                     // pasos. Truncamos a un prefijo como evidencia para el modelo.
                     let snippet: String = raw.chars().take(400).collect();
-                    let ellipsis = if raw.chars().count() > 400 { " …[truncado]" } else { "" };
+                    let ellipsis = if raw.chars().count() > 400 { " ...[truncated]" } else { "" };
                     convo.push(AgentMsg::assistant(format!("{snippet}{ellipsis}")));
                     convo.push(AgentMsg::harness_error(format!(
-                        "Tu respuesta no fue un objeto JSON válido ({e}). Responde con un único objeto JSON con la forma {{\"tool\": ..., \"args\": ...}}."
+                        "Your response was not a valid JSON object ({e}). Respond with a single JSON object shaped like {{\"tool\": ..., \"args\": ...}}."
                     )));
                     continue;
                 }
@@ -553,7 +553,7 @@ async fn run_inner(
         }
     }
 
-    // Persistir la sesión (historial completo) tras completar el turno, si aplica.
+    // Persist the full session history after completing the turn, if applicable.
     if persist {
         let sess = session_store::StoredSession {
             id: session_id.to_string(),
@@ -565,16 +565,15 @@ async fn run_inner(
             messages: convo,
         };
         if let Err(e) = session_store::save(&sess) {
-            tracing::warn!("no se pudo guardar la sesión {}: {e}", session_id);
+            tracing::warn!("could not save session {}: {e}", session_id);
         }
     }
 
     Ok(outcome)
 }
 
-/// Procesa una única llamada a herramienta: valida args, detecta bucles, evalúa permisos,
-/// ejecuta y reinyecta el resultado. Compartida por las rutas nativa y GBNF. Empuja a `convo`
-/// y actualiza `seen`; devuelve `Loop` si la firma se repitió demasiadas veces.
+/// Process one tool call: validate args, detect loops, evaluate permissions, execute,
+/// and feed the result back into the conversation.
 #[allow(clippy::too_many_arguments)]
 async fn process_call(
     sink: &dyn LoopSink,
@@ -594,15 +593,15 @@ async fn process_call(
 ) -> AppResult<CallFlow> {
     let args_str = serde_json::to_string(args).unwrap_or_else(|_| "{}".into());
 
-    // Validar args contra el esquema de la herramienta antes de cualquier otra cosa.
+    // Validate args against the tool schema before anything else.
     if let Err(e) = registry.validate(tool, args) {
-        let msg = format!("argumentos inválidos: {e}");
+        let msg = format!("invalid arguments: {e}");
         sink.emit_tool(session_id, step, tool, &args_str, &msg, true);
         convo.push(AgentMsg::tool_result(tool, msg, true).with_call_id(call_id));
         return Ok(CallFlow::Continue);
     }
 
-    // Detección de bucles: misma herramienta + args repetida.
+    // Loop detection: same tool + same args repeated.
     let sig = format!("{tool}:{args_str}");
     let count = {
         let c = seen.entry(sig).or_insert(0);
@@ -614,24 +613,23 @@ async fn process_call(
     }
     if count >= 2 {
         let nudge = format!(
-            "Ya ejecutaste '{tool}' con esos mismos argumentos y el resultado fue idéntico. \
-             No repitas la misma llamada. Si ya tienes la información necesaria, entrega tu \
-             respuesta final."
+            "You already ran '{tool}' with the same arguments and the result was identical. \
+             Do not repeat the same call. If you already have the information you need, provide \
+             your final answer."
         );
         sink.emit_tool(session_id, step, tool, &args_str, &nudge, true);
         convo.push(AgentMsg::harness_note(nudge));
         return Ok(CallFlow::Continue);
     }
 
-    // Evaluar permisos según el modo y el riesgo de la herramienta.
+    // Evaluate permissions based on mode and tool risk.
     let risk = registry.risk(tool);
     let mut decision = match risk {
         Some(r) => permissions::decide(mode, r),
-        None => Decision::Allow, // herramienta desconocida: execute() devolverá error
+        None => Decision::Allow, // unknown tool: execute() will return the error
     };
-    // En modo headless (auto_allow) convierte cualquier Ask en Allow sin tocar la UI.
-    // En modo Tauri: "Permitir siempre" de un turno anterior en esta misma sesión ya no
-    // se vuelve a preguntar por esta herramienta (no degrada un Deny duro, solo evita el Ask).
+    // In headless mode, auto_allow turns Ask into Allow. In Tauri mode, a previous
+    // "always allow" skips future asks for this tool in the same session.
     if decision == Decision::Ask {
         if auto_allow {
             decision = Decision::Allow;
@@ -650,32 +648,28 @@ async fn process_call(
     let allowed = match decision {
         Decision::Allow => true,
         Decision::Deny => {
-            let msg = format!("La herramienta '{tool}' está denegada en el modo actual (plan).");
+            let msg = format!("The tool '{tool}' is denied in the current mode (plan).");
             sink.emit_tool(session_id, step, tool, &args_str, &msg, true);
             convo.push(AgentMsg::tool_result(tool, msg, true).with_call_id(call_id));
             return Ok(CallFlow::Continue);
         }
         Decision::Ask => {
-            // Solo reachable en modo Tauri (auto_allow convierte Ask en Allow arriba).
+            // Only reachable in Tauri mode.
             match state {
                 Some(state) => request_permission(sink, state, session_id, tool, args, cancel)
                     .await?,
-                None => true, // defensa: si llegamos aquí sin state, permitimos.
+                None => true,
             }
         }
     };
     if !allowed {
-        let msg = "El usuario denegó la ejecución de esta herramienta.".to_string();
+        let msg = "The user denied execution of this tool.".to_string();
         sink.emit_tool(session_id, step, tool, &args_str, &msg, true);
         convo.push(AgentMsg::tool_result(tool, msg, true).with_call_id(call_id));
         return Ok(CallFlow::Continue);
     }
 
-    // Ejecutar herramienta. La salida completa se emite a la UI; la copia que entra al
-    // contexto del modelo se trunca a `RESULT_CTX_CAP` chars para que una única lectura
-    // densa (p.ej. un archivo numérico de cientos de líneas) no llene solo el contexto
-    // chico (8k). El modelo puede paginar con offset/limit para ver el resto. Es la misma
-    // política que Claude Code: las tools no son parishe de volcado libre.
+    // Execute tool. The UI receives full output; the model-context copy is capped.
     let (result, is_error) = match registry.execute(tool, args, ctx).await {
         Ok(out) => (out, false),
         Err(e) => (e.to_string(), true),
@@ -684,8 +678,7 @@ async fn process_call(
     let capped = cap_for_context(&result);
     convo.push(AgentMsg::tool_result(tool, capped, is_error).with_call_id(call_id));
 
-    // Una escritura o ejecución exitosa cambia el mundo: las firmas previas ya no son evidencia
-    // de bucle (p.ej. releer un archivo tras modificarlo es legítimo).
+    // Successful writes/commands change the world, so previous signatures stop being loop evidence.
     if !is_error && matches!(risk, Some(tools::Risk::Write) | Some(tools::Risk::Exec)) {
         seen.clear();
     }
@@ -834,7 +827,7 @@ fn build_step_output(content: String, acc: Vec<AccCall>) -> StepOutput {
 
 /// Extrae `{tool, args}` de la respuesta del modelo, tolerando texto sobrante.
 pub fn parse_tool_call(raw: &str) -> Result<(String, Value), String> {
-    let json_slice = extract_json_object(raw).ok_or("no se encontró un objeto JSON")?;
+    let json_slice = extract_json_object(raw).ok_or("no JSON object was found")?;
     let v: Value = serde_json::from_str(json_slice).map_err(|e| e.to_string())?;
     let tool = v
         .get("tool")
@@ -879,9 +872,8 @@ fn extract_json_object(s: &str) -> Option<&str> {
     None
 }
 
-/// Devuelve una copia de la conversación recortada para que quepa en `budget` tokens,
-/// preservando el system prompt (índice 0) y la tarea original (índice 1). `convo` original
-/// no se modifica (conserva el historial completo para persistencia).
+/// Return a trimmed copy of the conversation that fits the token budget while preserving
+/// the system prompt and original user task.
 fn budget_view(convo: &[AgentMsg], budget: usize) -> Vec<AgentMsg> {
     let total = |c: &[AgentMsg]| -> usize {
         c.iter().map(|m| approx_tokens(&m.content) + 4).sum()
@@ -899,15 +891,14 @@ fn budget_view(convo: &[AgentMsg], budget: usize) -> Vec<AgentMsg> {
         view.insert(
             2,
             AgentMsg::harness_note(format!(
-                "[… {removed} mensajes anteriores omitidos para ahorrar contexto …]"
+                "[... {removed} earlier messages omitted to save context ...]"
             )),
         );
     }
     view
 }
 
-/// Solicita confirmación al usuario y espera su respuesta (o la cancelación del turno).
-/// Ruta Tauri: emite `agent://permission` y bloquea hasta el `respond_permission` del frontend.
+/// Request user confirmation and wait for the response or cancellation.
 async fn request_permission(
     sink: &dyn LoopSink,
     state: &Arc<AppState>,
@@ -952,22 +943,18 @@ async fn request_permission(
     Ok(resp.approved)
 }
 
-/// Resumen legible de la acción que se va a confirmar.
+/// Readable summary of the action that needs confirmation.
 fn permission_summary(tool: &str, args: &Value) -> String {
     let get = |k: &str| args.get(k).and_then(|v| v.as_str()).unwrap_or("");
     match tool {
-        "bash" => format!("Ejecutar: {}", get("command")),
-        "write_file" => format!("Escribir archivo: {}", get("path")),
-        "edit" => format!("Editar archivo: {}", get("path")),
-        _ => format!("Ejecutar {tool}"),
+        "bash" => format!("Run: {}", get("command")),
+        "write_file" => format!("Write file: {}", get("path")),
+        "edit" => format!("Edit file: {}", get("path")),
+        _ => format!("Run {tool}"),
     }
 }
 
-/// Tope de caracteres (aprox) de una tool result que entra al CONTEXTO del modelo. La
-/// UI recibe la salida completa; al modelo se le entrega a lo sumo `RESULT_CTX_CAP` chars
-/// con un aviso de truncado, para que una tool no llene sola un contexto chico. El modelo
-/// puede paginar (read_file offset/limit) para ver el resto. Es la estrategia de Claude
-/// Code.
+/// Character cap for a tool result inserted into model context. The UI receives the full output.
 const RESULT_CTX_CAP: usize = 6000;
 
 fn cap_for_context(s: &str) -> String {
@@ -977,6 +964,6 @@ fn cap_for_context(s: &str) -> String {
     }
     let head: String = s.chars().take(RESULT_CTX_CAP).collect();
     format!(
-        "{head}\n\n… [salida truncada a {RESULT_CTX_CAP} de {total} caracteres para ahorrar contexto; usá offset/limit o grep para ver el resto]"
+        "{head}\n\n... [output truncated to {RESULT_CTX_CAP} of {total} characters to save context; use offset/limit or grep to inspect the rest]"
     )
 }

@@ -18,7 +18,7 @@
 </script>
 
 <div class="msg" class:user={isUser} class:assistant={!isUser}>
-  <div class="role">{isUser ? "Tú" : "Assistant"}</div>
+  <div class="role">{isUser ? "You" : "Assistant"}</div>
 
   <div class="bubble">
     {#if reasoning}
@@ -26,9 +26,9 @@
         <button class="reasoning-toggle" onclick={() => (showReasoning = !showReasoning)}>
           <span class="reasoning-icon" class:open={showReasoning}>▸</span>
           <span class="reasoning-label">
-            {inReasoning ? "pensando…" : "razonamiento"}
+            {inReasoning ? "thinking..." : "reasoning"}
             {#if !inReasoning}
-              <span class="dim">· {reasoning.length} car.</span>
+              <span class="dim">· {reasoning.length} chars</span>
             {/if}
           </span>
           {#if inReasoning}<span class="cursor">▋</span>{/if}

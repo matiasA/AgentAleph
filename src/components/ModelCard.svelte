@@ -15,7 +15,7 @@
 
   let downloading = $state(false);
 
-  // Marca de "español nativo" derivada de los tags (sin campo extra en el modelo).
+  // "Native Spanish" marker derived from tags, without adding a model field.
   const isSpanish = $derived(
     model.tags.some((t) => ["es", "espanol", "español", "multilingue", "multilingüe"].includes(t.toLowerCase()))
   );
@@ -38,7 +38,7 @@
         <span class="name">{model.name}</span>
         <span class="tag">{model.params}</span>
         <span class="tag dim-tag">{model.size_gb} GB</span>
-        {#if isSpanish}<span class="tag" title="Buen soporte de español">🇪🇸 Español</span>{/if}
+        {#if isSpanish}<span class="tag" title="Strong Spanish support">🇪🇸 Spanish</span>{/if}
       </div>
       <div class="dim small">{model.author}/{model.repo.split("/")[1] ?? model.repo}</div>
     </div>
@@ -59,7 +59,7 @@
   <div class="row between" style="margin-top:8px">
     <span class="dim small">Q4_K_M · {model.size_gb} GB</span>
     <button class="primary small-btn" onclick={handleDownload} disabled={downloading}>
-      {downloading ? "Iniciando..." : "Descargar"}
+      {downloading ? "Starting..." : "Download"}
     </button>
   </div>
 </div>

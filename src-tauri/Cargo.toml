@@ -1,7 +1,7 @@
 [package]
 name = "agent-aleph"
-version = "0.2.0-beta.4"
-description = "Agent Aleph — agente de codificación 100% local sobre llama.cpp, simple de usar"
+version = "0.2.0-beta.5"
+description = "Agent Aleph — a simple, 100% local AI coding agent powered by llama.cpp"
 authors = ["matiasA"]
 edition = "2021"
 rust-version = "1.77"

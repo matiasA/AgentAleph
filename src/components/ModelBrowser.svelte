@@ -22,7 +22,7 @@
   let loadingFiles = $state(false);
   let filesError = $state<string | null>(null);
 
-  // Explorar HF (todos los modelos GGUF, sin query)
+  // Browse HF: all GGUF models, no query.
   let view = $state<"catalog" | "browse">("catalog");
   let sort = $state("downloads");
   let browseResults = $state<HfModel[]>([]);
@@ -30,22 +30,22 @@
   let browseLoaded = $state(false);
   let browseLimit = $state(40);
 
-  // Temas / navegación por intención
+  // Topics / intent-based navigation.
   let topics = $state<Topic[]>([]);
   let activeTopic = $state<Topic | null>(null);
   let topicResults = $state<HfModel[]>([]);
   let topicLoading = $state(false);
 
-  // Hardware detectado para el badge "te entra".
+  // Detected hardware for the fit badge.
   let hardware = $state<Hardware | null>(null);
   let hwLabel = $state("");
   let contextSize = $state(4096);
 
   const sortOptions = [
-    { value: "downloads", label: "Más descargados" },
-    { value: "likes", label: "Más gustados" },
-    { value: "trendingScore", label: "Tendencia" },
-    { value: "lastModified", label: "Recientes" },
+    { value: "downloads", label: "Most downloaded" },
+    { value: "likes", label: "Most liked" },
+    { value: "trendingScore", label: "Trending" },
+    { value: "lastModified", label: "Recent" },
   ];
 
   $effect(() => {
@@ -162,7 +162,7 @@
     try {
       hfFiles = await api.listModelFiles(m.repo);
       if (hfFiles.length === 0) {
-        filesError = "No se encontraron archivos .gguf en este repo";
+        filesError = "No .gguf files were found in this repo";
       }
     } catch (e: any) {
       filesError = String(e);
@@ -183,7 +183,7 @@
   }
 
   let groupedCatalog = $derived.by(() => {
-    const order = ["Ultra-ligero", "Ligero", "Mediano", "Pesado", "MoE / Pesado+"];
+    const order = ["Tiny", "Light", "Medium", "Heavy", "MoE / Heavy+"];
     const groups: Record<string, CatalogModel[]> = {};
     for (const m of catalog) {
       if (!groups[m.category]) groups[m.category] = [];
@@ -215,16 +215,16 @@
         <div class="small muted">Repo HF</div>
         <div style="font-weight:600">{selectedHf.repo}</div>
       </div>
-      <button class="ghost" onclick={back}>← Volver</button>
+      <button class="ghost" onclick={back}>← Back</button>
     </div>
     <div class="scroll" style="padding:8px 10px">
       {#if loadingFiles}
-        <div class="muted small">Listando archivos GGUF...</div>
+        <div class="muted small">Listing GGUF files...</div>
       {:else if filesError}
         <div class="small" style="color:var(--error)">{filesError}</div>
       {:else}
         <div class="small muted" style="margin-bottom:6px">
-          {hfFiles.length} archivo(s) GGUF. Elige una cuantización:
+          {hfFiles.length} GGUF file(s). Choose a quantization:
         </div>
         {#each hfFiles as f (f.path)}
           <div class="file-row">
@@ -233,7 +233,7 @@
               <div class="dim small">{humanSize(f.size)}</div>
             </div>
             <button class="primary small-btn" onclick={() => downloadHfFile(f)}>
-              ↓ Descargar
+              ↓ Download
             </button>
           </div>
         {/each}
@@ -258,18 +258,18 @@
     <div class="search-box">
       <input
         type="text"
-        placeholder="Buscar en HuggingFace (ej: qwen 3.6, gemma 4)"
+        placeholder="Search Hugging Face (for example: qwen 3.6, gemma 4)"
         bind:value={query}
         onkeydown={onKeydown}
       />
       <button onclick={doSearch} disabled={searching}>
-        {searching ? "…" : "Buscar"}
+        {searching ? "…" : "Search"}
       </button>
     </div>
 
     {#if hwLabel}
-      <div class="hwbar" title="Estimamos qué modelos te entran según tu memoria libre">
-        <span>🖥️</span><span class="small">Tu equipo: {hwLabel}</span>
+      <div class="hwbar" title="Estimates which models fit based on your free memory">
+        <span>🖥️</span><span class="small">Your machine: {hwLabel}</span>
       </div>
     {/if}
 
@@ -279,14 +279,14 @@
         class:active={!activeTopic && !searched && view === "catalog"}
         onclick={showCatalog}
       >
-        📦 Catálogo
+        📦 Catalog
       </button>
       <button
         class="chip"
         class:active={!activeTopic && !searched && view === "browse"}
         onclick={showBrowse}
       >
-        🧭 Explorar HF
+        🧭 Browse HF
       </button>
       <span class="chip-sep"></span>
       {#each topics as t (t.id)}
@@ -304,7 +304,7 @@
     {#if searched}
       <div class="scroll" style="padding:8px 10px">
         <div class="small muted" style="margin-bottom:6px">
-          {searchResults.length} resultado(s) en HF Hub
+          {searchResults.length} result(s) on HF Hub
         </div>
         {#each searchResults as m (m.repo)}
           {@render hfRow(m)}
@@ -317,20 +317,20 @@
         {/if}
         {#if topicLoading}
           <div class="muted small" style="padding:6px 0">
-            Buscando “{activeTopic.label}” en HuggingFace…
+            Searching “{activeTopic.label}” on Hugging Face...
           </div>
         {:else}
           {#if recommendedModels.length}
-            <div class="section-label">Generalistas recomendados</div>
+            <div class="section-label">Recommended Generalists</div>
             {#each recommendedModels as m (m.id)}
               <ModelCard model={m} fit={fitFor(m)} onDownload={downloadFromCatalog} />
             {/each}
           {/if}
           <div class="section-label">
-            {recommendedModels.length ? "Especializados (HuggingFace)" : "Resultados en HuggingFace"}
+            {recommendedModels.length ? "Specialized Models (Hugging Face)" : "Results on Hugging Face"}
           </div>
           {#if topicResults.length === 0}
-            <div class="muted small">Sin resultados especializados para este tema.</div>
+            <div class="muted small">No specialized results for this topic.</div>
           {:else}
             {#each topicResults as m (m.repo)}
               {@render hfRow(m)}
@@ -341,7 +341,7 @@
     {:else}
       {#if view === "catalog"}
         {#if loading}
-          <div class="muted small" style="padding:10px">Cargando catálogo…</div>
+          <div class="muted small" style="padding:10px">Loading catalog...</div>
         {:else}
           <div class="scroll" style="padding:8px 10px">
             {#each groupedCatalog as group (group.category)}
@@ -354,23 +354,23 @@
         {/if}
       {:else}
         <div class="browse-bar">
-          <span class="small muted">Todos los GGUF del Hub</span>
+          <span class="small muted">All GGUF models on the Hub</span>
           <div class="sort-wrap">
             <Select value={sort} options={sortOptions} onChange={changeSort} />
           </div>
         </div>
         <div class="scroll" style="padding:8px 10px">
           {#if browsing && browseResults.length === 0}
-            <div class="muted small" style="padding:10px">Cargando modelos…</div>
+            <div class="muted small" style="padding:10px">Loading models...</div>
           {:else if browseResults.length === 0}
-            <div class="muted small" style="padding:10px">Sin resultados.</div>
+            <div class="muted small" style="padding:10px">No results.</div>
           {:else}
             {#each browseResults as m (m.repo)}
               {@render hfRow(m)}
             {/each}
             {#if browseResults.length >= browseLimit}
               <button class="ghost loadmore" onclick={loadMore} disabled={browsing}>
-                {browsing ? "Cargando…" : "Cargar más"}
+                {browsing ? "Loading..." : "Load more"}
               </button>
             {/if}
           {/if}

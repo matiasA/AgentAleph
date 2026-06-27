@@ -87,7 +87,7 @@ pub fn now_iso() -> String {
 pub fn make_title(s: &str) -> String {
     let t: String = s.trim().chars().take(50).collect();
     if t.is_empty() {
-        "Sesión".into()
+        "Session".into()
     } else {
         t
     }

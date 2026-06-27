@@ -14,7 +14,7 @@ impl Tool for ReadFile {
     }
 
     fn description(&self) -> &'static str {
-        "Lee un archivo de texto del proyecto (offset = línea inicial 0-based; limit = máx líneas, def 400)."
+        "Read a project text file. offset is the 0-based starting line; limit is the maximum number of lines, default 400."
     }
 
     fn risk(&self) -> Risk {
@@ -33,7 +33,7 @@ impl Tool for ReadFile {
         let path = args
             .get("path")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| AppError::Other("read_file requiere el argumento 'path'".into()))?;
+            .ok_or_else(|| AppError::Other("read_file requires the 'path' argument".into()))?;
         let offset = args.get("offset").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
         let limit = args
             .get("limit")
@@ -44,7 +44,7 @@ impl Tool for ReadFile {
 
         let content = tokio::fs::read_to_string(&resolved)
             .await
-            .map_err(|e| AppError::Other(format!("no se pudo leer {}: {e}", resolved.display())))?;
+            .map_err(|e| AppError::Other(format!("could not read {}: {e}", resolved.display())))?;
 
         let lines: Vec<&str> = content.lines().collect();
         let total = lines.len();
@@ -58,13 +58,13 @@ impl Tool for ReadFile {
         }
         if end < total {
             out.push_str(&format!(
-                "\n… [{} líneas más; usa offset={} para continuar]\n",
+                "\n... [{} more lines; use offset={} to continue]\n",
                 total - end,
                 end
             ));
         }
         if out.is_empty() {
-            out = "[archivo vacío o rango fuera de límites]".into();
+            out = "[empty file or range out of bounds]".into();
         }
         Ok(out)
     }

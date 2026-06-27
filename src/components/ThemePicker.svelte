@@ -28,7 +28,7 @@
 <svelte:window onclick={() => (open = false)} />
 
 <div class="wrap" role="presentation" onclick={(e) => e.stopPropagation()}>
-  <button class="icon-btn" title="Cambiar tono" onclick={() => (open = !open)}>
+  <button class="icon-btn" title="Change accent" onclick={() => (open = !open)}>
     <Icon name="palette" size="sm" />
   </button>
 

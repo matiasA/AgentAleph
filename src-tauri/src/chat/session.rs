@@ -47,7 +47,7 @@ pub async fn send_chat(
     let port = *state.server_port.lock().await;
     if port == 0 {
         return Err(AppError::Busy(
-            "No hay modelo cargado. Carga uno primero.".into(),
+            "No model loaded. Load one first.".into(),
         ));
     }
 

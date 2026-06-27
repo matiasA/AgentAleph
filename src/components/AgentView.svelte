@@ -45,7 +45,7 @@
   let sessionOptions = $derived([
     ...(sessions.find((s) => s.id === sid)
       ? []
-      : [{ value: sid, label: "· sesión actual (sin guardar)" }]),
+      : [{ value: sid, label: "· current session (unsaved)" }]),
     ...sessions.map((s) => ({ value: s.id, label: s.title })),
   ]);
 
@@ -94,7 +94,7 @@
       unlisten.push(
         await onAgentDone((e) => {
           if (e.session_id !== sid) return;
-          // Cerrar la burbuja del modelo en streaming; si quedó vacía, descartarla.
+          // Close the streaming model bubble; discard it if it stayed empty.
           if (modelIdx !== null && items[modelIdx]?.kind === "model") {
             const mb = items[modelIdx] as any;
             mb.streaming = false;
@@ -104,7 +104,7 @@
             }
           }
           if (e.reason === "done") {
-            // En la ruta nativa el texto final ya se transmitió a la burbuja: no duplicar.
+            // In the native route, the final text was already streamed into the bubble: do not duplicate it.
             const last = items[items.length - 1] as any;
             if (last?.kind === "model" && (e.text ?? "").trim() && last.text.trim() === e.text.trim()) {
               items[items.length - 1] = { kind: "final", text: e.text };
@@ -152,11 +152,11 @@
     const text = input.trim();
     if (!text || running) return;
     if (!status.loaded) {
-      alert("Carga un modelo primero desde la pestaña 'Modelos'");
+      alert("Load a model first from the Models tab");
       return;
     }
     if (!workingDir) {
-      alert("Elige primero la carpeta del proyecto");
+      alert("Choose the project folder first");
       return;
     }
     input = "";
@@ -164,8 +164,8 @@
     running = true;
     scrollToBottom();
     try {
-      // El contexto adjunto (panel derecho) se antepone al input que recibe el modelo;
-      // la burbuja del usuario muestra solo su texto.
+      // Attached context from the right panel is prepended to the input sent to the model;
+      // the user bubble shows only the user's text.
       const ctx = buildContextBlock();
       await api.agentSend(sid, workingDir, mode, ctx ? `${ctx}\n${text}` : text);
     } catch (e: any) {
@@ -192,7 +192,7 @@
     modelIdx = null;
   }
 
-  // ---------- Sesiones ----------
+  // ---------- Sessions ----------
 
   async function refreshSessions() {
     try {
@@ -224,7 +224,7 @@
   }
 
   async function deleteSession(id: string) {
-    if (!confirm("¿Eliminar esta sesión?")) return;
+    if (!confirm("Delete this session?")) return;
     await api.deleteAgentSession(id);
     if (id === sid) newSession();
     await refreshSessions();
@@ -239,16 +239,16 @@
     }
   }
 
-  /** Reconstruye el timeline visible a partir de la conversación guardada. */
+  /** Rebuilds the visible timeline from the saved conversation. */
   function reconstruct(messages: AgentMsg[]): Item[] {
     const out: Item[] = [];
     let lastTool = "?";
     let lastArgs = "";
     for (const m of messages) {
-      // Notas y errores del harness (rol system con harness=true) y el system prompt: ocultos.
+      // Harness notes/errors and the system prompt stay hidden.
       if (m.role === "system") continue;
       if (m.role === "assistant") {
-        // Ruta nativa: las llamadas vienen en tool_calls; el contenido puede ir vacío.
+        // Native route: calls arrive in tool_calls; content may be empty.
         if (m.tool_calls && m.tool_calls.length) {
           const c = m.tool_calls[0];
           lastTool = c.name;
@@ -257,7 +257,7 @@
             out.push({ kind: "model", text: m.content, reasoning: "", streaming: false });
           }
         } else {
-          // Ruta GBNF: la llamada (o el "final") va como JSON en el contenido.
+          // GBNF route: the call, or "final", is JSON in content.
           const p = tryParse(m.content);
           if (p?.tool === "final") {
             out.push({ kind: "final", text: p.args?.text ?? m.content });
@@ -270,7 +270,7 @@
           }
         }
       } else if (m.role === "tool") {
-        // Resultado de herramienta (modelo rico): el contenido es la salida cruda.
+        // Tool result in the rich message model: content is raw output.
         out.push({
           kind: "tool",
           tool: m.tool_name ?? lastTool,
@@ -279,7 +279,7 @@
           isError: m.is_error ?? false,
         });
       } else if (m.role === "user") {
-        // Compatibilidad con sesiones antiguas: resultados/notas reinyectados como user.
+        // Backward compatibility with old sessions: tool results/notes were reinjected as user messages.
         if (m.content.startsWith("Resultado de ")) {
           const nl = m.content.indexOf("\n");
           const header = nl >= 0 ? m.content.slice(0, nl) : m.content;
@@ -296,7 +296,7 @@
           m.content.startsWith("Error: tu respuesta") ||
           m.content.startsWith("[…")
         ) {
-          // mensajes internos del harness (sesiones antiguas): no se muestran
+          // Internal harness messages from old sessions are hidden.
           continue;
         } else {
           out.push({ kind: "user", text: m.content });
@@ -317,11 +317,11 @@
 <div class="col" style="flex:1;overflow:hidden">
   <div class="agent-header row between">
     <div class="row" style="gap:8px">
-      <span class="small muted">Agente</span>
+      <span class="small muted">Agent</span>
       {#if status.loaded}
         <span class="tag accent">{status.model_name}</span>
       {:else}
-        <span class="tag warn">sin modelo</span>
+        <span class="tag warn">no model</span>
       {/if}
     </div>
     <div class="row" style="gap:8px">
@@ -331,16 +331,16 @@
       </div>
       <button class="ghost small-btn" onclick={pickDir} title={workingDir}>
         <Icon name="folder" size="sm" />
-        {workingDir ? workingDir.split("/").pop() : "Elegir carpeta"}
+        {workingDir ? workingDir.split("/").pop() : "Choose folder"}
       </button>
       <button class="ghost small-btn" onclick={clearAll} disabled={running || items.length === 0}>
-        Limpiar
+        Clear
       </button>
     </div>
   </div>
 
   <div class="session-bar">
-    <button class="ghost small-btn" onclick={newSession} disabled={running}>+ Nueva</button>
+    <button class="ghost small-btn" onclick={newSession} disabled={running}>+ New</button>
     <div class="session-select">
       <Select
         value={sid}
@@ -350,7 +350,7 @@
       />
     </div>
     {#if sessions.find((s) => s.id === sid)}
-      <button class="ghost small-btn danger" onclick={() => deleteSession(sid)} disabled={running} title="Eliminar sesión">
+      <button class="ghost small-btn danger" onclick={() => deleteSession(sid)} disabled={running} title="Delete session">
         ✕
       </button>
     {/if}
@@ -363,10 +363,9 @@
           <span class="orb-halo"></span>
           <Logo size={80} />
         </div>
-        <div class="empty-title">Agente listo</div>
+        <div class="empty-title">Agent Ready</div>
         <div class="empty-sub">
-          Elige una carpeta de proyecto y describe una tarea. El agente usará herramientas
-          paso a paso.
+          Choose a project folder and describe a task. The agent will use tools step by step.
         </div>
       </div>
     {:else}
@@ -378,7 +377,7 @@
             {#if it.reasoning}
               <div class="reasoning">{it.reasoning}</div>
             {/if}
-            <div class="label dim">decisión {it.streaming ? "·…" : ""}</div>
+            <div class="label dim">decision {it.streaming ? "·…" : ""}</div>
             <pre class="json">{it.text}</pre>
           </div>
         {:else if it.kind === "tool"}
@@ -398,18 +397,18 @@
   {#if pending}
     <div class="permission">
       <div class="perm-text">
-        <span class="perm-tag">permiso</span>
-        El agente quiere: <strong>{pending.summary}</strong>
+        <span class="perm-tag">permission</span>
+        The agent wants to: <strong>{pending.summary}</strong>
         <div class="dim small" style="margin-top:2px">
-          "Permitir siempre" no volverá a preguntar por <strong>{pending.tool}</strong> en esta sesión.
+          "Always allow" will not ask again for <strong>{pending.tool}</strong> during this session.
         </div>
       </div>
       <div class="row" style="gap:8px">
-        <button class="danger small-btn" onclick={() => respond(false)}>Rechazar</button>
+        <button class="danger small-btn" onclick={() => respond(false)}>Reject</button>
         <button class="ghost small-btn" onclick={() => respond(true, true)}>
-          Permitir siempre
+          Always allow
         </button>
-        <button class="solid small-btn" onclick={() => respond(true)}>Permitir</button>
+        <button class="solid small-btn" onclick={() => respond(true)}>Allow</button>
       </div>
     </div>
   {/if}
@@ -417,7 +416,7 @@
   <div class="composer-wrap">
     <div class="composer" class:disabled={!status.loaded}>
       <textarea
-        placeholder={status.loaded ? "Describe una tarea para el agente…" : "Carga un modelo para empezar"}
+        placeholder={status.loaded ? "Describe a task for the agent..." : "Load a model to start"}
         bind:value={input}
         onkeydown={onKeydown}
         rows="1"
@@ -425,12 +424,12 @@
       ></textarea>
       <div class="composer-bar">
         <span class="hint-inline">
-          <span class="kbd">↵</span> ejecutar · <span class="kbd">⇧↵</span> nueva línea
+          <span class="kbd">↵</span> run · <span class="kbd">⇧↵</span> new line
         </span>
         {#if running}
-          <button class="send stop" onclick={stop} title="Detener"><Icon name="stop" size="sm" /></button>
+          <button class="send stop" onclick={stop} title="Stop"><Icon name="stop" size="sm" /></button>
         {:else}
-          <button class="send" onclick={send} disabled={!status.loaded || !input.trim()} title="Ejecutar">
+          <button class="send" onclick={send} disabled={!status.loaded || !input.trim()} title="Run">
             <Icon name="send" size="sm" />
           </button>
         {/if}

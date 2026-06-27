@@ -28,12 +28,12 @@
 
 <div class="col" style="flex:1;overflow:hidden">
   <div class="row between" style="padding:8px 10px;border-bottom:1px solid var(--border)">
-    <span class="small muted">Descargas</span>
+    <span class="small muted">Downloads</span>
     <span class="dim small">{downloads.length}</span>
   </div>
   <div class="scroll" style="padding:8px 10px">
     {#if downloads.length === 0}
-      <div class="empty dim small">Sin descargas</div>
+      <div class="empty dim small">No downloads</div>
     {:else}
       {#each [...downloads].reverse() as d (d.id)}
         <div class="dl">
@@ -53,7 +53,7 @@
               <span>{humanSpeed(d.speed_bps)} · {pct(d).toFixed(0)}%</span>
             </div>
             <div class="row" style="justify-content:flex-end;margin-top:4px">
-              <button class="ghost small-btn" onclick={() => cancel(d.id)}>Cancelar</button>
+              <button class="ghost small-btn" onclick={() => cancel(d.id)}>Cancel</button>
             </div>
           {:else if statusError(d.status)}
             <div class="small" style="color:var(--error);margin-top:4px">

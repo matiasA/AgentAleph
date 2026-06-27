@@ -42,7 +42,7 @@ pub fn llama_binary_path() -> AppResult<PathBuf> {
         }
     }
     Err(AppError::NotFound(
-        "No se encontró el binario llama-server".into(),
+        "llama-server binary was not found".into(),
     ))
 }
 
@@ -165,13 +165,13 @@ pub async fn start_server(
 
     if !Path::new(model).exists() {
         return Err(AppError::NotFound(format!(
-            "Modelo no encontrado: {}",
+            "Model not found: {}",
             model
         )));
     }
 
     let progress = ProgressEmitter::new(app, model);
-    progress.set(3, "Iniciando llama-server");
+    progress.set(3, "Starting llama-server");
     let model_size = std::fs::metadata(model).map(|m| m.len()).unwrap_or(0);
 
     let mut cmd = Command::new(&bin);
@@ -254,7 +254,7 @@ pub async fn start_server(
                 };
                 // tau=20s: ~63% de la banda a los 20s, ~95% a los 60s, nunca 100%.
                 let time_frac = 1.0 - (-start.elapsed().as_secs_f64() / 20.0).exp();
-                progress.set_band(io_frac.max(time_frac), 15, 82, "Cargando pesos del modelo");
+                progress.set_band(io_frac.max(time_frac), 15, 82, "Loading model weights");
                 tokio::time::sleep(std::time::Duration::from_millis(200)).await;
             }
         });
@@ -305,15 +305,15 @@ async fn progress_pipe<R: tokio::io::AsyncRead + Unpin + Send + 'static>(
                 tracing::info!("[llama.stderr] {}", trimmed);
                 // Marcadores conocidos de llama.cpp (orden de aparición).
                 if trimmed.contains("loading model") {
-                    progress.set(8, "Leyendo modelo");
+                    progress.set(8, "Reading model");
                 } else if trimmed.contains("fitting params to device memory") {
-                    progress.set(15, "Ajustando a la memoria del dispositivo");
+                    progress.set(15, "Fitting to device memory");
                 } else if trimmed.contains("warming up the model") {
-                    progress.set(85, "Calentando el modelo");
+                    progress.set(85, "Warming up model");
                 } else if trimmed.contains("model loaded") {
-                    progress.set(92, "Modelo cargado");
+                    progress.set(92, "Model loaded");
                 } else if trimmed.contains("server is listening") {
-                    progress.set(96, "Servidor escuchando");
+                    progress.set(96, "Server listening");
                 }
             }
             Err(_) => break,
@@ -356,7 +356,7 @@ pub async fn wait_for_ready(port: u16, timeout: std::time::Duration) -> AppResul
         tokio::time::sleep(std::time::Duration::from_millis(400)).await;
     }
     Err(AppError::Inference(format!(
-        "llama-server no respondió en {}s (último: {})",
+        "llama-server did not respond in {}s (last: {})",
         timeout.as_secs(),
         last_err
     )))

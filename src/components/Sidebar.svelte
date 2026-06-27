@@ -29,10 +29,10 @@
   let localRefreshKey = $state(0);
 
   const nav: { id: Tab; label: string; icon: string }[] = [
-    { id: "models", label: "Modelos", icon: "box" },
-    { id: "catalog", label: "Catálogo", icon: "catalog" },
-    { id: "downloads", label: "Descargas", icon: "download" },
-    { id: "settings", label: "Ajustes", icon: "settings" },
+    { id: "models", label: "Models", icon: "box" },
+    { id: "catalog", label: "Catalog", icon: "catalog" },
+    { id: "downloads", label: "Downloads", icon: "download" },
+    { id: "settings", label: "Settings", icon: "settings" },
   ];
 
   let pendingCount = $derived(
@@ -45,7 +45,7 @@
       onDownloadsChange();
       tab = "downloads";
     } catch (e: any) {
-      alert("Error al iniciar descarga: " + String(e));
+      alert("Could not start download: " + String(e));
     }
   }
 
@@ -60,7 +60,7 @@
     <Logo size={40} />
     <div class="brand-text">
       <div class="brand-name">Agent Aleph</div>
-      <div class="brand-sub">agente · modelos locales</div>
+      <div class="brand-sub">agent · local models</div>
     </div>
   </div>
 
@@ -90,10 +90,10 @@
 
   <div class="foot">
     <ThemePicker />
-    <button class="icon-btn" title="Refrescar" onclick={refreshLocal}>
+    <button class="icon-btn" title="Refresh" onclick={refreshLocal}>
       <Icon name="refresh" size="sm" />
     </button>
-    <button class="icon-btn" title="Vista de cuadrícula">
+    <button class="icon-btn" title="Grid view">
       <Icon name="grid" size="sm" />
     </button>
   </div>

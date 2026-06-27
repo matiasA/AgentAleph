@@ -55,7 +55,7 @@ export const api = {
   saveSettings: (s: Settings) => invoke<void>("save_settings", { settings: s }),
   getAppInfo: () => invoke<AppInfo>("get_app_info"),
   listGpus: () => invoke<GpuDevice[]>("list_gpus"),
-  // Skills (paquetes de instrucciones especializadas para el agente).
+  // Skills: specialized instruction packs for the agent.
   listSkills: () => invoke<Skill[]>("list_skills"),
   setSkillEnabled: (slug: string, enabled: boolean) =>
     invoke<void>("set_skill_enabled", { slug, enabled }),
@@ -64,7 +64,7 @@ export const api = {
   importSkill: (folder: string) => invoke<Skill>("import_skill", { folder }),
   deleteSkill: (slug: string) => invoke<void>("delete_skill", { slug }),
   readSkill: (slug: string) => invoke<string>("read_skill", { slug }),
-  // Contexto adjunto al turno del agente.
+  // Context attached to an agent turn.
   readContextFile: (path: string) => invoke<ContextFile>("read_context_file", { path }),
 };
 
@@ -164,7 +164,7 @@ export async function onModelLoading(
   return listen<LoadProgress>("model://loading", (e) => cb(e.payload));
 }
 
-/** Hardware detectado, normalizado para el cálculo de "te entra". */
+/** Detected hardware normalized for the model-fit badge. */
 export interface Hardware {
   hasGpu: boolean;
   vramFreeMb: number;
@@ -175,51 +175,51 @@ export type FitLevel = "green" | "amber" | "red" | "unknown";
 
 export interface Fit {
   level: FitLevel;
-  /** Texto corto para el badge. */
+  /** Short badge label. */
   label: string;
-  /** Detalle para el tooltip. */
+  /** Tooltip detail. */
   detail: string;
 }
 
 /**
- * Estima si un modelo "te entra", comparando memoria necesaria contra VRAM+RAM
- * (decisión: contra todo, porque una máquina sin VRAM puede correr en RAM).
- *  🟢 fluido · 🟡 lento (offload parcial / CPU) · 🔴 no entra.
+ * Estimates whether a model fits by comparing required memory against VRAM + RAM.
+ * A machine without usable VRAM can still run from RAM, so RAM is included.
+ * Green = smooth, amber = slow/partial offload, red = does not fit.
  */
 export function modelFit(sizeGb: number, contextSize: number, hw: Hardware | null): Fit {
   if (!hw || (hw.vramFreeMb === 0 && hw.ramFreeMb === 0)) {
     return { level: "unknown", label: "", detail: "" };
   }
-  const overheadMb = 512 + (contextSize / 1024) * 128; // pesos + caché KV aprox.
+  const overheadMb = 512 + (contextSize / 1024) * 128; // weights + approximate KV cache
   const neededMb = sizeGb * 1024 + overheadMb;
   const budgetMb = hw.vramFreeMb + hw.ramFreeMb;
-  // Una iGPU sin VRAM dedicada (ej. Intel UHD) no sirve para offload: trátala como CPU.
+  // An iGPU without dedicated VRAM is not useful for offload: treat it as CPU-only.
   const usableGpu = hw.hasGpu && hw.vramFreeMb >= 1024;
 
   if (usableGpu) {
     if (neededMb <= hw.vramFreeMb * 0.92) {
-      return { level: "green", label: "Fluido en GPU", detail: "Entra completo en tu VRAM." };
+      return { level: "green", label: "Smooth on GPU", detail: "Fits entirely in your VRAM." };
     }
     if (neededMb <= budgetMb * 0.85) {
       return {
         level: "amber",
-        label: "Te irá lento",
-        detail: "No cabe entero en VRAM: parte irá a RAM/CPU (más lento pero usable).",
+        label: "Will run slow",
+        detail: "Does not fit entirely in VRAM: part will spill to RAM/CPU, slower but usable.",
       };
     }
-    return { level: "red", label: "No te entra", detail: "Supera tu VRAM + RAM disponibles." };
+    return { level: "red", label: "Does not fit", detail: "Exceeds your available VRAM + RAM." };
   }
-  // Sin GPU: corre en CPU desde RAM.
+  // No usable GPU: run on CPU from RAM.
   if (neededMb <= hw.ramFreeMb * 0.7) {
-    return { level: "green", label: "Va bien en CPU", detail: "Entra holgado en tu RAM." };
+    return { level: "green", label: "Good on CPU", detail: "Fits comfortably in your RAM." };
   }
   if (neededMb <= hw.ramFreeMb * 0.92) {
-    return { level: "amber", label: "Lento en CPU", detail: "Entra en RAM pero justo; irá lento." };
+    return { level: "amber", label: "Slow on CPU", detail: "Fits in RAM, but barely; it will be slow." };
   }
-  return { level: "red", label: "No te entra", detail: "Supera tu RAM disponible." };
+  return { level: "red", label: "Does not fit", detail: "Exceeds your available RAM." };
 }
 
-/** Hardware detectado + etiqueta legible + tamaño de contexto, para el badge "te entra". */
+/** Detected hardware, readable label, and context size for the fit badge. */
 export interface HardwareInfo {
   hardware: Hardware;
   label: string;
@@ -227,8 +227,8 @@ export interface HardwareInfo {
 }
 
 /**
- * Detecta GPUs + RAM libre y los normaliza en un único presupuesto VRAM+RAM.
- * Compartido entre el Catálogo y los modelos locales para no duplicar el cálculo.
+ * Detects GPUs + free RAM and normalizes them into one VRAM+RAM budget.
+ * Shared between Catalog and Local Models to avoid duplicating the calculation.
  */
 export async function detectHardware(): Promise<HardwareInfo> {
   const [gpus, mem, s] = await Promise.all([
@@ -236,8 +236,8 @@ export async function detectHardware(): Promise<HardwareInfo> {
     api.systemMemory().catch(() => ({ total_mb: 0, free_mb: 0 } as SystemMemory)),
     api.getSettings().catch(() => null),
   ]);
-  // Sumo la VRAM libre de TODAS las GPUs aprovechables (descarto iGPU con ~0,
-  // p. ej. Intel UHD). El presupuesto total para "te entra" es VRAM + RAM.
+  // Sum free VRAM across usable GPUs and discard iGPUs with effectively no VRAM.
+  // The fit budget is VRAM + RAM.
   const usableGpus = gpus
     .filter((g) => g.free_mb >= 1024)
     .sort((a, b) => b.free_mb - a.free_mb);
@@ -251,9 +251,9 @@ export async function detectHardware(): Promise<HardwareInfo> {
     const vramGb = (vramFreeMb / 1024).toFixed(1);
     const totalGb = ((vramFreeMb + mem.free_mb) / 1024).toFixed(0);
     const gpuName = usableGpus.length > 1 ? `${usableGpus.length} GPUs` : usableGpus[0].name;
-    label = `${gpuName} · ${vramGb} GB VRAM + ${ramGb} GB RAM (${totalGb} GB útiles)`;
+    label = `${gpuName} · ${vramGb} GB VRAM + ${ramGb} GB RAM (${totalGb} GB usable)`;
   } else {
-    label = `CPU · ${ramGb} GB RAM libre`;
+    label = `CPU · ${ramGb} GB free RAM`;
   }
 
   return { hardware, label, contextSize: s ? s.context_size : 4096 };
