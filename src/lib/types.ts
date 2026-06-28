@@ -177,3 +177,20 @@ export interface AppInfo {
   os: string;
   arch: string;
 }
+
+export type UpdatePhase =
+  | "idle"
+  | "checking"
+  | "available"
+  | "downloading"
+  | "ready"
+  | "error";
+
+export interface UpdateStatus {
+  phase: UpdatePhase;
+  version: string;
+  notes: string;
+  percent: number;
+  isAppImage: boolean;
+  error: string | null;
+}

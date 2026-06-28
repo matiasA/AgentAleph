@@ -2,7 +2,7 @@ name: Build installers
 
 # Builds installers (.deb / .AppImage) when requested:
 #   - manually from the Actions tab with "Run workflow"
-#   - automatically when pushing a vX.Y.Z tag, also creating a Release
+#   - automatically when pushing a vX.Y.Z tag, also creating a signed Release with latest.json
 on:
   workflow_dispatch:
   push:
@@ -15,6 +15,9 @@ permissions:
 jobs:
   build-linux:
     runs-on: ubuntu-22.04
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -57,29 +60,16 @@ jobs:
       - name: Download llama.cpp binary
         run: ./scripts/setup-llama.sh
 
-      - name: Build app (.deb and .AppImage)
-        run: npm run tauri build
-
-      - name: List artifacts
-        run: ls -lh src-tauri/target/release/bundle/deb src-tauri/target/release/bundle/appimage
-
-      - name: Upload installers as artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: agent-aleph-linux
-          retention-days: 14
-          if-no-files-found: error
-          path: |
-            src-tauri/target/release/bundle/deb/*.deb
-            src-tauri/target/release/bundle/appimage/*.AppImage
-
-      - name: Create/update Release (tags only)
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+      - name: Build and release (signed + latest.json)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           # Tags with a hyphen (v0.2.0-beta.1) are published as prereleases.
           prerelease: ${{ contains(github.ref_name, '-') }}
-          generate_release_notes: true
-          files: |
-            src-tauri/target/release/bundle/deb/*.deb
-            src-tauri/target/release/bundle/appimage/*.AppImage
+          # Only create a release on tag pushes; on workflow_dispatch just upload artifacts.
+          tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+          releaseName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+          releaseBody: "See the release notes above."
+          releaseDraft: false
+          includeUpdaterJson: true

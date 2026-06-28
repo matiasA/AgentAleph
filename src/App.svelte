@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api, onDownloadProgress, onModelStatus, onModelLoading } from "./lib/api";
-  import type { AppInfo, DownloadState, LoadProgress, ModelStatus } from "./lib/types";
+  import type { AppInfo, DownloadState, LoadProgress, ModelStatus, UpdateStatus } from "./lib/types";
+  import { startUpdateChecker } from "./lib/updater";
   import Sidebar from "./components/Sidebar.svelte";
   import ChatView from "./components/ChatView.svelte";
   import AgentView from "./components/AgentView.svelte";
@@ -64,6 +65,7 @@
   let loadProgress = $state<LoadProgress | null>(null);
   let info = $state<AppInfo | null>(null);
   let sessionId = $state(crypto.randomUUID());
+  let updateStatus = $state<UpdateStatus | null>(null);
 
   let pendingDownloads = $derived(
     downloads.filter((d) => d.status === "Downloading" || d.status === "Pending").length
@@ -90,6 +92,10 @@
     onModelStatus((s) => {
       status = s;
       if (s.loaded) loadProgress = null;
+    });
+
+    startUpdateChecker((s) => {
+      updateStatus = s;
     });
 
     onModelLoading((p) => {
@@ -142,6 +148,7 @@
       {status}
       {downloads}
       {loadProgress}
+      {updateStatus}
       onDownloadsChange={refreshDownloads}
       onStatusChange={refreshStatus}
     />

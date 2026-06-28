@@ -26,6 +26,11 @@ pub struct AppInfo {
 }
 
 #[tauri::command]
+pub fn is_appimage() -> bool {
+    std::env::var("APPIMAGE").is_ok()
+}
+
+#[tauri::command]
 pub async fn list_catalog_models() -> AppResult<Vec<models::CatalogModel>> {
     Ok(models::list_catalog())
 }

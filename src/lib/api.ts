@@ -66,6 +66,7 @@ export const api = {
   readSkill: (slug: string) => invoke<string>("read_skill", { slug }),
   // Context attached to an agent turn.
   readContextFile: (path: string) => invoke<ContextFile>("read_context_file", { path }),
+  isAppImage: () => invoke<boolean>("is_appimage"),
 };
 
 export async function onDownloadProgress(

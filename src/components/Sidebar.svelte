@@ -1,6 +1,6 @@
 <script lang="ts">
   import { api } from "../lib/api";
-  import type { DownloadState, LoadProgress, ModelStatus } from "../lib/types";
+  import type { DownloadState, LoadProgress, ModelStatus, UpdateStatus } from "../lib/types";
   import ModelBrowser from "./ModelBrowser.svelte";
   import LocalModels from "./LocalModels.svelte";
   import DownloadsList from "./DownloadsList.svelte";
@@ -13,12 +13,14 @@
     status,
     downloads,
     loadProgress = null,
+    updateStatus = null,
     onDownloadsChange,
     onStatusChange,
   }: {
     status: ModelStatus;
     downloads: DownloadState[];
     loadProgress?: LoadProgress | null;
+    updateStatus?: UpdateStatus | null;
     onDownloadsChange: () => void;
     onStatusChange: () => void;
   } = $props();
@@ -82,7 +84,7 @@
     {:else if tab === "catalog"}
       <ModelBrowser onDownload={handleDownload} />
     {:else if tab === "downloads"}
-      <DownloadsList {downloads} />
+      <DownloadsList {downloads} {updateStatus} />
     {:else if tab === "settings"}
       <SettingsView onSaved={onStatusChange} />
     {/if}

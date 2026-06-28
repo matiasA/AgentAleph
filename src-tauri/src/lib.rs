@@ -27,8 +27,10 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Arc::new(app_state))
         .invoke_handler(tauri::generate_handler![
+            commands::is_appimage,
             commands::list_catalog_models,
             commands::list_topics,
             commands::search_hf,
