@@ -23,6 +23,10 @@ const settings: Settings = {
   use_mlock: false,
   extra_model_dirs: ["/home/matias/.local/share/agent-aleph/models"],
   tool_calling: "auto",
+  brave_api_key: "",
+  memory_enabled: true,
+  memory_project_budget: 2200,
+  memory_user_budget: 1375,
 };
 
 // Example native session: exercises assistant tool_calls + tool role in AgentView.reconstruct.

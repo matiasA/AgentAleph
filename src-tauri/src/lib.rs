@@ -65,6 +65,12 @@ pub fn run() {
             commands::import_skill,
             commands::delete_skill,
             commands::read_skill,
+            commands::read_project_memory,
+            commands::read_user_memory,
+            commands::write_project_memory,
+            commands::write_user_memory,
+            commands::clear_project_memory,
+            commands::clear_user_memory,
             commands::read_context_file,
         ])
         .setup(|app| {
@@ -73,6 +79,10 @@ pub fn run() {
                 let boxed: Box<dyn std::error::Error> = Box::new(e);
                 boxed
             })?;
+            // Kill any llama-server left running by a previous, uncleanly-terminated
+            // session (crash / force-kill) before the user can load a model and end up
+            // competing with it for VRAM/RAM.
+            inference::kill_stale_orphan();
             tracing::info!(
                 "Agent Aleph started. Models at: {:?}",
                 state.models_dir

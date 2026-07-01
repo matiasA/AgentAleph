@@ -349,6 +349,40 @@ pub async fn read_skill(slug: String) -> AppResult<String> {
     crate::agent::skills::read_full(&slug)
 }
 
+// ---------- Memory ----------
+
+#[tauri::command]
+pub async fn read_project_memory(working_dir: String) -> AppResult<String> {
+    Ok(crate::agent::memory::read_project(std::path::Path::new(
+        &working_dir,
+    )))
+}
+
+#[tauri::command]
+pub async fn read_user_memory() -> AppResult<String> {
+    Ok(crate::agent::memory::read_user())
+}
+
+#[tauri::command]
+pub async fn write_project_memory(working_dir: String, content: String) -> AppResult<()> {
+    crate::agent::memory::write_project_raw(std::path::Path::new(&working_dir), &content)
+}
+
+#[tauri::command]
+pub async fn write_user_memory(content: String) -> AppResult<()> {
+    crate::agent::memory::write_user_raw(&content)
+}
+
+#[tauri::command]
+pub async fn clear_project_memory(working_dir: String) -> AppResult<()> {
+    crate::agent::memory::clear_project(std::path::Path::new(&working_dir))
+}
+
+#[tauri::command]
+pub async fn clear_user_memory() -> AppResult<()> {
+    crate::agent::memory::clear_user()
+}
+
 // ---------- Contexto adjunto ----------
 
 /// Contenido de un archivo adjunto al contexto del turno (truncado).

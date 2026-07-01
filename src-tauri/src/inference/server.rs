@@ -17,8 +17,66 @@ impl ServerHandle {
     pub async fn kill(&mut self) -> AppResult<()> {
         let _ = self.child.kill().await;
         let _ = self.child.wait().await;
+        remove_pid_file();
         Ok(())
     }
+}
+
+fn pid_file_path() -> PathBuf {
+    let mut p = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
+    p.push("agent-aleph");
+    p.push("llama-server.pid");
+    p
+}
+
+fn write_pid_file(pid: u32) {
+    let path = pid_file_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(path, pid.to_string());
+}
+
+fn remove_pid_file() {
+    let _ = std::fs::remove_file(pid_file_path());
+}
+
+/// True if `/proc/<pid>/exe` resolves to our bundled binary — a sanity check so a PID
+/// recycled by an unrelated process is never killed just because it matches a stale file.
+fn looks_like_llama_server(pid: u32) -> bool {
+    std::fs::read_link(format!("/proc/{pid}/exe"))
+        .map(|p| p.to_string_lossy().contains("llama-server"))
+        .unwrap_or(false)
+}
+
+/// Kills a `llama-server` left running by a previous, uncleanly-terminated instance of
+/// Agent Aleph (e.g. the app was force-killed or crashed while a model was loaded, so the
+/// `kill_on_drop`/window-close cleanup never ran). Meant to be called once at startup,
+/// before the user can load a model, so a leftover instance never competes for VRAM/RAM
+/// with a fresh load.
+pub fn kill_stale_orphan() {
+    let path = pid_file_path();
+    let Ok(raw) = std::fs::read_to_string(&path) else {
+        return;
+    };
+    let _ = std::fs::remove_file(&path); // stale from here on regardless of what we find
+    let Ok(pid) = raw.trim().parse::<u32>() else {
+        return;
+    };
+    if !Path::new(&format!("/proc/{pid}")).exists() {
+        return; // already gone
+    }
+    if !looks_like_llama_server(pid) {
+        tracing::warn!(
+            "stale PID {pid} from a previous session is no longer a llama-server process; leaving it alone"
+        );
+        return;
+    }
+    tracing::warn!("killing orphaned llama-server left running by a previous session (pid {pid})");
+    let _ = std::process::Command::new("kill")
+        .arg("-9")
+        .arg(pid.to_string())
+        .status();
 }
 
 pub fn find_free_port() -> u16 {
@@ -232,6 +290,9 @@ pub async fn start_server(
         progress.fail(&msg);
         AppError::Inference(msg)
     })?;
+    if let Some(pid) = child.id() {
+        write_pid_file(pid);
+    }
 
     // Poller de progreso de carga (banda 15..82%). Combina dos señales y toma el
     // máximo, de modo que la barra siempre avanza:
@@ -268,10 +329,17 @@ pub async fn start_server(
         tokio::spawn(progress_pipe(stderr, progress.clone()));
     }
 
-    // Esperar a que /health responda
-    if let Err(e) = wait_for_ready(port, std::time::Duration::from_secs(120)).await {
+    // Esperar a que /health responda. Timeout escala con el tamaño del modelo:
+    // mínimo 2 min, +1 min por cada GB, tope 10 min.
+    let timeout_secs = {
+        let gb = model_size as f64 / 1_073_741_824.0;
+        (120.0 + gb * 60.0).min(600.0) as u64
+    };
+    if let Err(e) = wait_for_ready(port, std::time::Duration::from_secs(timeout_secs)).await {
         progress.fail(&e.to_string());
         let _ = child.kill().await;
+        let _ = child.wait().await; // reap para no dejar zombie con GPU ocupada
+        remove_pid_file();
         return Err(e);
     }
 

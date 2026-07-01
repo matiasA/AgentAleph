@@ -72,9 +72,14 @@ async function runCheck(set: Setter): Promise<void> {
       });
     }
   } catch (e: unknown) {
-    // Silently ignore "no update" or network errors — don't surface to user
-    const msg = String(e);
-    if (msg.includes("No updates available") || msg.includes("status code 404")) return;
+    // Silently ignore expected non-error conditions
+    const msg = String(e).toLowerCase();
+    if (
+      msg.includes("no updates available") ||
+      msg.includes("status code 404") ||
+      msg.includes("did not respond with a successful status code") ||
+      msg.includes("unsuccessful status code")
+    ) return;
     console.warn("Update check failed:", e);
   }
 }

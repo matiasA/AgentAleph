@@ -294,6 +294,10 @@ pub async fn run_agent(
 
     let ctx = tools::ToolCtx {
         working_dir: PathBuf::from(&working_dir),
+        brave_api_key: settings.brave_api_key.clone(),
+        memory_enabled: settings.memory_enabled,
+        memory_project_budget: settings.memory_project_budget,
+        memory_user_budget: settings.memory_user_budget,
     };
 
     let sink = Arc::new(TauriSink { app: app.clone() });
@@ -350,6 +354,10 @@ pub async fn run_turn(
     let mode_enum = AgentMode::from_str(mode);
     let ctx = tools::ToolCtx {
         working_dir: PathBuf::from(working_dir),
+        brave_api_key: String::new(),
+        memory_enabled: settings.memory_enabled,
+        memory_project_budget: settings.memory_project_budget,
+        memory_user_budget: settings.memory_user_budget,
     };
     let session_id = uuid::Uuid::new_v4().to_string();
     run_inner(
@@ -390,7 +398,7 @@ async fn run_inner(
         .timeout(std::time::Duration::from_secs(600))
         .build()?;
     let url = format!("http://127.0.0.1:{}/v1/chat/completions", port);
-    let registry = Registry::new();
+    let registry = Registry::new(settings.memory_enabled);
     let docs = registry.docs();
     let native = use_native_tools(&settings.tool_calling, active_model);
     let grammar = tool_call_grammar(&docs);
@@ -431,7 +439,25 @@ async fn run_inner(
         Some(s) if !s.messages.is_empty() => s.messages,
         _ => {
             let skills = crate::agent::skills::enabled_docs();
-            vec![AgentMsg::system(system_prompt(working_dir, &docs, native, &skills))]
+            let (mem_project, mem_user) = if settings.memory_enabled {
+                (
+                    crate::agent::memory::project_prompt_block(
+                        std::path::Path::new(working_dir),
+                        settings.memory_project_budget,
+                    ),
+                    crate::agent::memory::user_prompt_block(settings.memory_user_budget),
+                )
+            } else {
+                (None, None)
+            };
+            vec![AgentMsg::system(system_prompt(
+                working_dir,
+                &docs,
+                native,
+                &skills,
+                mem_project.as_deref(),
+                mem_user.as_deref(),
+            ))]
         }
     };
     convo.push(AgentMsg::user(user_input));

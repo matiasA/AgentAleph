@@ -58,7 +58,16 @@ fn signature(d: &ToolDoc) -> String {
 }
 
 /// Agent system prompt. `native` selects the contract: native tool calls or GBNF JSON.
-pub fn system_prompt(working_dir: &str, docs: &[ToolDoc], native: bool, skills: &[SkillDoc]) -> String {
+/// `memory_project`/`memory_user` are pre-formatted blocks from `agent::memory` (already
+/// clipped to their budget), or `None` if empty/disabled.
+pub fn system_prompt(
+    working_dir: &str,
+    docs: &[ToolDoc],
+    native: bool,
+    skills: &[SkillDoc],
+    memory_project: Option<&str>,
+    memory_user: Option<&str>,
+) -> String {
     let mut tools_desc = String::new();
     for d in docs {
         tools_desc.push_str(&format!("- {} — {}\n", signature(d), d.description));
@@ -81,9 +90,36 @@ pub fn system_prompt(working_dir: &str, docs: &[ToolDoc], native: bool, skills: 
         }
         s
     };
+    let memory_block = {
+        let mut s = String::new();
+        if let Some(p) = memory_project {
+            s.push_str(
+                "\n\nPersistent project memory (facts/decisions recorded in earlier \
+                 sessions on this project):",
+            );
+            s.push_str(p);
+        }
+        if let Some(u) = memory_user {
+            s.push_str(
+                "\n\nPersistent user memory (the user's preferences, apply across all \
+                 projects):",
+            );
+            s.push_str(u);
+        }
+        if !s.is_empty() {
+            s.push_str(
+                "\nMemory is accumulated knowledge, not the source of truth: safety/\
+                 permission rules always win, then project instructions (AGENTS.md/\
+                 CLAUDE.md) on technical conflicts, then project memory over user \
+                 memory for this repo's conventions. Never store secrets, credentials, \
+                 API keys, or tokens in memory.",
+            );
+        }
+        s
+    };
     let head = format!(
         "You are a coding agent running locally on the user's machine.\n\
-         Project directory: {working_dir}{project}{skills_block}"
+         Project directory: {working_dir}{project}{skills_block}{memory_block}"
     );
     if native {
         format!(
@@ -98,7 +134,8 @@ Rules:
 - Do not repeat a tool with the same arguments: the result would be identical.
 - As soon as you have the requested information, give your final answer in plain text. Do not keep exploring.
 - Never announce a future step in your final answer ("next I will...", "then I will generate..."). If the task needs more steps, execute them with tools now; the final answer only describes what you already did.
-- Report results honestly: if something failed or remains undone, say so explicitly; do not claim something is done or verified unless you checked it with a tool."#
+- Report results honestly: if something failed or remains undone, say so explicitly; do not claim something is done or verified unless you checked it with a tool.
+- When you learn a durable fact worth remembering for future sessions (a project convention, a decision, a user preference), record it with the memory tool. Don't record trivial or session-specific details."#
         )
     } else {
         format!(
@@ -118,7 +155,8 @@ Rules:
 - NEVER repeat a tool with the same arguments: the result would be identical.
 - As soon as a tool result already contains the requested information, immediately respond with the "final" tool. Do not keep exploring if you already have the answer.
 - "final" means the task is ALREADY complete. Never use it to announce future steps ("next I will generate...", "then I will convert..."): if steps remain, execute them first with the appropriate tools and call "final" only when the work is genuinely done.
-- Report results honestly: if something failed or remains undone, say so explicitly in the "final" text; do not claim something is done or verified unless you checked it with a tool."#
+- Report results honestly: if something failed or remains undone, say so explicitly in the "final" text; do not claim something is done or verified unless you checked it with a tool.
+- When you learn a durable fact worth remembering for future sessions (a project convention, a decision, a user preference), record it with the memory tool. Don't record trivial or session-specific details."#
         )
     }
 }

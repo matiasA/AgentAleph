@@ -83,6 +83,14 @@ export interface Settings {
   extra_model_dirs: string[];
   /** Estrategia de tool-calling del agente: "auto" | "native" | "grammar". */
   tool_calling: string;
+  /** Brave Search API key (opcional). Vacío = usa DuckDuckGo como fallback. */
+  brave_api_key: string;
+  /** Habilita el tool `memory` (memoria persistente cross-sesión). */
+  memory_enabled: boolean;
+  /** Presupuesto de caracteres para `<working_dir>/.agent-aleph/MEMORY.md`. */
+  memory_project_budget: number;
+  /** Presupuesto de caracteres para `USER.md` (global). */
+  memory_user_budget: number;
 }
 
 export interface GpuDevice {

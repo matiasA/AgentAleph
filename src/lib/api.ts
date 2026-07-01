@@ -64,6 +64,16 @@ export const api = {
   importSkill: (folder: string) => invoke<Skill>("import_skill", { folder }),
   deleteSkill: (slug: string) => invoke<void>("delete_skill", { slug }),
   readSkill: (slug: string) => invoke<string>("read_skill", { slug }),
+  // Memory: persistent cross-session facts (project MEMORY.md + global USER.md).
+  readProjectMemory: (workingDir: string) =>
+    invoke<string>("read_project_memory", { workingDir }),
+  readUserMemory: () => invoke<string>("read_user_memory"),
+  writeProjectMemory: (workingDir: string, content: string) =>
+    invoke<void>("write_project_memory", { workingDir, content }),
+  writeUserMemory: (content: string) => invoke<void>("write_user_memory", { content }),
+  clearProjectMemory: (workingDir: string) =>
+    invoke<void>("clear_project_memory", { workingDir }),
+  clearUserMemory: () => invoke<void>("clear_user_memory"),
   // Context attached to an agent turn.
   readContextFile: (path: string) => invoke<ContextFile>("read_context_file", { path }),
   isAppImage: () => invoke<boolean>("is_appimage"),

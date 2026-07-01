@@ -10,15 +10,28 @@
     addContextItem,
     removeContextItem,
   } from "../lib/agentContext.svelte";
+  import { activeProject } from "../lib/activeProject.svelte";
 
   let { mode = "chat" }: { mode?: "chat" | "agent" } = $props();
 
   let skillsOpen = $state(true);
+  let memOpen = $state(true);
   let connOpen = $state(true);
   let ctxOpen = $state(true);
 
   let skills = $state<Skill[]>([]);
   let busy = $state(false);
+
+  // Memory: project (repo-scoped) + user (global) persistent facts.
+  let memProjectContent = $state("");
+  let memUserContent = $state("");
+  let memProjectBudget = $state(2200);
+  let memUserBudget = $state(1375);
+  let editingProject = $state(false);
+  let editingUser = $state(false);
+  let memProjectDraft = $state("");
+  let memUserDraft = $state("");
+  let memBusy = $state(false);
 
   // Skill creation form.
   let creating = $state(false);
@@ -37,6 +50,12 @@
   ];
 
   onMount(refreshSkills);
+  onMount(refreshUserMemory);
+
+  $effect(() => {
+    activeProject.workingDir; // dependency: re-fetch when the active project changes
+    refreshProjectMemory();
+  });
 
   async function refreshSkills() {
     try {
@@ -92,6 +111,103 @@
       await refreshSkills();
     } catch (e) {
       alert("Could not delete: " + e);
+    }
+  }
+
+  // ---------- Memory ----------
+
+  async function refreshUserMemory() {
+    try {
+      const settings = await api.getSettings();
+      memProjectBudget = settings.memory_project_budget;
+      memUserBudget = settings.memory_user_budget;
+    } catch {
+      // keep defaults
+    }
+    try {
+      memUserContent = await api.readUserMemory();
+    } catch {
+      memUserContent = "";
+    }
+  }
+
+  async function refreshProjectMemory() {
+    if (!activeProject.workingDir) {
+      memProjectContent = "";
+      return;
+    }
+    try {
+      memProjectContent = await api.readProjectMemory(activeProject.workingDir);
+    } catch {
+      memProjectContent = "";
+    }
+  }
+
+  function startEditProject() {
+    memProjectDraft = memProjectContent;
+    editingProject = true;
+  }
+
+  async function saveProject() {
+    if (!activeProject.workingDir || memBusy) return;
+    memBusy = true;
+    try {
+      await api.writeProjectMemory(activeProject.workingDir, memProjectDraft);
+      memProjectContent = memProjectDraft;
+      editingProject = false;
+    } catch (e) {
+      alert("Could not save project memory: " + e);
+    } finally {
+      memBusy = false;
+    }
+  }
+
+  async function clearProjectMem() {
+    if (!activeProject.workingDir || memBusy) return;
+    if (!confirm("Clear project memory (MEMORY.md)? This cannot be undone.")) return;
+    memBusy = true;
+    try {
+      await api.clearProjectMemory(activeProject.workingDir);
+      memProjectContent = "";
+      editingProject = false;
+    } catch (e) {
+      alert("Could not clear: " + e);
+    } finally {
+      memBusy = false;
+    }
+  }
+
+  function startEditUser() {
+    memUserDraft = memUserContent;
+    editingUser = true;
+  }
+
+  async function saveUser() {
+    if (memBusy) return;
+    memBusy = true;
+    try {
+      await api.writeUserMemory(memUserDraft);
+      memUserContent = memUserDraft;
+      editingUser = false;
+    } catch (e) {
+      alert("Could not save user memory: " + e);
+    } finally {
+      memBusy = false;
+    }
+  }
+
+  async function clearUserMem() {
+    if (memBusy) return;
+    if (!confirm("Clear user memory (USER.md)? This applies to all projects.")) return;
+    memBusy = true;
+    try {
+      await api.clearUserMemory();
+      memUserContent = "";
+      editingUser = false;
+    } catch (e) {
+      alert("Could not clear: " + e);
+    } finally {
+      memBusy = false;
     }
   }
 
@@ -182,6 +298,60 @@
         {/each}
         {#if !skills.length}
           <div class="empty">No skills yet. Create one or import a folder with a <code>SKILL.md</code>.</div>
+        {/if}
+      </div>
+    {/if}
+  </div>
+
+  <!-- Memory -->
+  <div class="panel-section">
+    <button class="section-head" onclick={() => (memOpen = !memOpen)}>
+      <span class="section-label">Memory</span>
+      <span class="chev" class:open={memOpen}><Icon name="chevron-up" size="sm" /></span>
+    </button>
+
+    {#if memOpen}
+      <div class="mem-block">
+        <div class="mem-head">
+          <span class="mem-title">Project</span>
+          <span class="mem-count">{memProjectContent.length} / {memProjectBudget}</span>
+        </div>
+        <div class="mem-note">
+          Saved in the repo (<code>.agent-aleph/MEMORY.md</code>) and shareable via git.
+          Don't store credentials or sensitive data.
+        </div>
+        {#if editingProject}
+          <textarea class="inp mem-area" rows="5" bind:value={memProjectDraft}></textarea>
+          <div class="row-actions">
+            <button class="mini-btn primary" onclick={saveProject} disabled={memBusy}>Save</button>
+            <button class="mini-btn" onclick={() => (editingProject = false)}>Cancel</button>
+          </div>
+        {:else}
+          <pre class="mem-area readonly">{memProjectContent || "No project memory yet. The agent will record facts here as it works."}</pre>
+          <div class="row-actions">
+            <button class="mini-btn" onclick={startEditProject} disabled={!activeProject.workingDir}>Edit</button>
+            <button class="mini-btn" onclick={clearProjectMem} disabled={!memProjectContent || memBusy}>Clear</button>
+          </div>
+        {/if}
+      </div>
+
+      <div class="mem-block">
+        <div class="mem-head">
+          <span class="mem-title">User (global)</span>
+          <span class="mem-count">{memUserContent.length} / {memUserBudget}</span>
+        </div>
+        {#if editingUser}
+          <textarea class="inp mem-area" rows="5" bind:value={memUserDraft}></textarea>
+          <div class="row-actions">
+            <button class="mini-btn primary" onclick={saveUser} disabled={memBusy}>Save</button>
+            <button class="mini-btn" onclick={() => (editingUser = false)}>Cancel</button>
+          </div>
+        {:else}
+          <pre class="mem-area readonly">{memUserContent || "No user memory yet. Applies across all projects."}</pre>
+          <div class="row-actions">
+            <button class="mini-btn" onclick={startEditUser}>Edit</button>
+            <button class="mini-btn" onclick={clearUserMem} disabled={!memUserContent || memBusy}>Clear</button>
+          </div>
         {/if}
       </div>
     {/if}
@@ -462,5 +632,48 @@
   }
   .empty code {
     font-size: 10.5px;
+  }
+
+  .mem-block {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: var(--bg-2);
+    border-radius: var(--radius);
+    padding: 9px 10px;
+  }
+  .mem-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .mem-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-0);
+  }
+  .mem-count {
+    font-size: 10.5px;
+    color: var(--text-3);
+  }
+  .mem-note {
+    font-size: 10.5px;
+    color: var(--text-3);
+    line-height: 1.4;
+  }
+  .mem-note code {
+    font-size: 10px;
+  }
+  .mem-area {
+    font-size: 11.5px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .mem-area.readonly {
+    margin: 0;
+    color: var(--text-2);
+    font-family: inherit;
+    max-height: 160px;
+    overflow-y: auto;
   }
 </style>

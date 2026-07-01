@@ -10,6 +10,7 @@
   } from "../lib/api";
   import type { AgentMsg, ModelStatus, SessionMeta } from "../lib/types";
   import { buildContextBlock } from "../lib/agentContext.svelte";
+  import { setActiveWorkingDir } from "../lib/activeProject.svelte";
   import Icon from "./Icon.svelte";
   import Logo from "./Logo.svelte";
   import Select from "./Select.svelte";
@@ -145,7 +146,10 @@
 
   async function pickDir() {
     const dir = await open({ directory: true, multiple: false });
-    if (typeof dir === "string") workingDir = dir;
+    if (typeof dir === "string") {
+      workingDir = dir;
+      setActiveWorkingDir(dir);
+    }
   }
 
   async function send() {
@@ -216,6 +220,7 @@
     if (!s) return;
     sid = s.id;
     workingDir = s.working_dir;
+    setActiveWorkingDir(s.working_dir);
     mode = s.mode === "plan" ? "plan" : "build";
     items = reconstruct(s.messages);
     modelIdx = null;

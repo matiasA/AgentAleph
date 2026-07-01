@@ -1,6 +1,7 @@
 pub mod agent_loop;
 pub mod context;
 pub mod grammar;
+pub mod memory;
 pub mod message;
 pub mod permissions;
 pub mod prompt;

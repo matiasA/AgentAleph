@@ -3,7 +3,10 @@ pub mod edit;
 pub mod glob;
 pub mod grep;
 pub mod list;
+pub mod memory;
 pub mod read_file;
+pub mod web_fetch;
+pub mod web_search;
 pub mod write_file;
 
 use crate::error::{AppError, AppResult};
@@ -58,6 +61,10 @@ pub struct ToolDoc {
 /// Contexto de ejecución compartido por todas las herramientas.
 pub struct ToolCtx {
     pub working_dir: PathBuf,
+    pub brave_api_key: String,
+    pub memory_enabled: bool,
+    pub memory_project_budget: usize,
+    pub memory_user_budget: usize,
 }
 
 /// Una herramienta invocable por el agente.
@@ -77,18 +84,22 @@ pub struct Registry {
 }
 
 impl Registry {
-    pub fn new() -> Self {
-        Self {
-            tools: vec![
-                Box::new(read_file::ReadFile),
-                Box::new(list::ListDir),
-                Box::new(glob::Glob),
-                Box::new(grep::Grep),
-                Box::new(write_file::WriteFile),
-                Box::new(edit::Edit),
-                Box::new(bash::Bash),
-            ],
+    pub fn new(memory_enabled: bool) -> Self {
+        let mut tools: Vec<Box<dyn Tool>> = vec![
+            Box::new(read_file::ReadFile),
+            Box::new(list::ListDir),
+            Box::new(glob::Glob),
+            Box::new(grep::Grep),
+            Box::new(web_fetch::WebFetch),
+            Box::new(web_search::WebSearch),
+            Box::new(write_file::WriteFile),
+            Box::new(edit::Edit),
+            Box::new(bash::Bash),
+        ];
+        if memory_enabled {
+            tools.push(Box::new(memory::Memory));
         }
+        Self { tools }
     }
 
     /// Documentación de todas las herramientas (para prompt, gramática y validación).
@@ -185,12 +196,6 @@ impl Registry {
             Some(t) => t.execute(args, ctx).await,
             None => Err(AppError::NotFound(format!("unknown tool: {name}"))),
         }
-    }
-}
-
-impl Default for Registry {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

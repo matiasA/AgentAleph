@@ -167,6 +167,18 @@
 
       <div class="section-title">Agent</div>
       <div class="field">
+        <label>Brave Search API key <span class="dim">(optional — for reliable web_search without rate limits)</span></label>
+        <input
+          type="password"
+          class="input"
+          placeholder="Leave empty to use DuckDuckGo (may get rate-limited)"
+          bind:value={s.brave_api_key}
+        />
+        <div class="dim small" style="margin-top:4px">
+          Free at <strong>brave.com/search/api</strong> — 2000 searches/month. If empty, falls back to DuckDuckGo.
+        </div>
+      </div>
+      <div class="field">
         <label>Tool calling <span class="dim">(how the agent invokes tools)</span></label>
         <Select bind:value={s.tool_calling} options={toolCallingOptions} />
         <div class="dim small" style="margin-top:4px">

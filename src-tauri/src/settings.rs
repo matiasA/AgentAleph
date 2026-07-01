@@ -41,6 +41,20 @@ pub struct Settings {
     /// - `"grammar"`: siempre la gramática GBNF por-tool (ruta universal, sin `--jinja`).
     #[serde(default = "default_tool_calling")]
     pub tool_calling: String,
+    /// Brave Search API key (opcional). Si está presente, web_search usa Brave en vez de DDG.
+    /// Clave gratuita en https://brave.com/search/api/ (2000 búsquedas/mes).
+    #[serde(default)]
+    pub brave_api_key: String,
+    /// Habilita el tool `memory` (memoria persistente cross-sesión). Si es false, el tool
+    /// no se registra: el modelo ni siquiera lo ve.
+    #[serde(default = "default_true")]
+    pub memory_enabled: bool,
+    /// Presupuesto de caracteres para `<working_dir>/.agent-aleph/MEMORY.md`.
+    #[serde(default = "default_memory_project_budget")]
+    pub memory_project_budget: usize,
+    /// Presupuesto de caracteres para `USER.md` (global, todas las sesiones/proyectos).
+    #[serde(default = "default_memory_user_budget")]
+    pub memory_user_budget: usize,
 }
 
 impl Default for Settings {
@@ -64,12 +78,24 @@ impl Default for Settings {
             use_mlock: false,
             extra_model_dirs: Vec::new(),
             tool_calling: default_tool_calling(),
+            brave_api_key: String::new(),
+            memory_enabled: default_true(),
+            memory_project_budget: default_memory_project_budget(),
+            memory_user_budget: default_memory_user_budget(),
         }
     }
 }
 
 fn default_tool_calling() -> String {
     "auto".into()
+}
+
+fn default_memory_project_budget() -> usize {
+    crate::agent::memory::PROJECT_BUDGET_DEFAULT
+}
+
+fn default_memory_user_budget() -> usize {
+    crate::agent::memory::USER_BUDGET_DEFAULT
 }
 
 fn num_threads() -> u32 {
